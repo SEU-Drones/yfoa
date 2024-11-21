@@ -1,3 +1,9 @@
+/*
+ * @description:
+ * @param:
+ * @input:
+ * @output:
+ */
 #ifndef _UNIFORMBSPLINE_H_
 #define _UNIFORMBSPLINE_H_
 
@@ -15,7 +21,7 @@ private:
   // control points for B-spline with different dimensions.
   // Each row represents one single control point
   // The dimension is determined by column number
-  // e.g. B-spline with N points in 3D space -> Nx3 matrix
+  // e.g. B-spline with N points in 3D space -> 3xN matrix
   Eigen::MatrixXd control_points_;
 
   int p_, n_, m_;     // p degree, n+1 control points, m = n+p+1

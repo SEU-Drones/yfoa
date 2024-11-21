@@ -50,7 +50,8 @@ enum ControlMode
     POS = 0,
     POSYAW = 1,
     POSVELYAW = 2,
-    POSVELACCYAW = 3
+    POSVELACCYAW = 3,
+    VEL
 };
 
 class MissionXYZ

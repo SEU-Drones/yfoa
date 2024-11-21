@@ -22,6 +22,7 @@ catkin_package(
 find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(NLopt REQUIRED)
+find_package(PCL 1.7 REQUIRED)
 
 include_directories(
   SYSTEM
@@ -29,7 +30,10 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${Eigen3_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
+  ${PCL_INCLUDE_DIRS}
 )
+
+include_directories("/usr/include/eigen3")
 
 add_library(yf_planner
   include/HybirdAstar.h
@@ -43,5 +47,6 @@ add_library(yf_planner
 target_link_libraries(yf_planner
   ${catkin_LIBRARIES}
   ${NLOPT_LIBRARIES}
+  ${PCL_LIBRARIES}
 )
 

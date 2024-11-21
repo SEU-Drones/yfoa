@@ -19,7 +19,7 @@ void PathNlopt::init(std::string filename, InESDFMap::Ptr map_ptr, bool verbose)
     lambda_feasibility_ = (double)(yaml_node["lambda_feasibility"]);
     lambda_distance_ = (double)(yaml_node["lambda_distance"]);
 
-    time_interval_ = (double)(yaml_node["time_interval"]);
+    // time_interval_ = (double)(yaml_node["time_interval"]);
     // time_interval_ = 0.1;
 
     // algorithm_ = (int)(yaml_node["algorithm"]);
@@ -48,10 +48,9 @@ void PathNlopt::init(std::string filename, InESDFMap::Ptr map_ptr, bool verbose)
     std::cout << "[PathNlopt INIT] lambda_smoothness: " << lambda_smoothness_ << std::endl;
     std::cout << "[PathNlopt INIT] lambda_feasibility: " << lambda_feasibility_ << std::endl;
     std::cout << "[PathNlopt INIT] lambda_distance: " << lambda_distance_ << std::endl;
-    std::cout << "[PathNlopt INIT] time interval: " << time_interval_ << " (s)"<< std::endl;
+    // std::cout << "[PathNlopt INIT] time interval: " << time_interval_ << " (s)" << std::endl;
     std::cout << "[PathNlopt INIT] max_iteration_num: " << max_iteration_num_ << std::endl;
     std::cout << "[PathNlopt INIT] max_iteration_time: " << max_iteration_time_ << std::endl;
-
 }
 
 void PathNlopt::setMap(InESDFMap::Ptr map_ptr)
@@ -101,51 +100,50 @@ void PathNlopt::optimize()
     opt.set_lower_bounds(lb);
     opt.set_upper_bounds(ub);
 
-    k_feas_ = 1;
-    double last_f_feasibility_ = 0;
-    f_feasibility_ = 0;
+    // k_feas_ = 1;
+    // double last_f_feasibility_ = 0;
+    // f_feasibility_ = 0;
 
-    do
+    // do
+    // {
+    try
     {
-        try
+        std::chrono::system_clock::time_point t1, t2;
+
+        t1 = std::chrono::system_clock::now();
+        nlopt::result result = opt.optimize(q, optimal_value_);
+        t2 = std::chrono::system_clock::now();
+        std::cout << "  optimize: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
+
+        if (verbose_)
         {
-            std::chrono::system_clock::time_point t1, t2;
-
-            t1 = std::chrono::system_clock::now();
-            nlopt::result result = opt.optimize(q, optimal_value_);
-            t2 = std::chrono::system_clock::now();
-            std::cout << "  optimize: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
-
-            if (verbose_)
-            {
-                //     std::cout << "[PathNlopt ========== feasloop " << feasloop_ << " ============ PathNlopt]" << std::endl;
-                //     std::cout << "[PathNlopt optimization variables] " << dim_ << " " << traj_pts_num_ << " " << variable_num_ << std::endl;
-                //     std::cout << "[PathNlopt result]: " << result << std::endl;
-                std::cout << "[PathNlopt optimal value, f_smoothness, f_distance, f_feasibility ]: " << optimal_value_ << ",    " << f_smoothness_ << ",    " << f_distance_ << ",    " << f_feasibility_ << std::endl;
-                std::cout << "[PathNlopt iteration count]: " << inloop_ << std::endl;
-            }
+            //     std::cout << "[PathNlopt ========== feasloop " << feasloop_ << " ============ PathNlopt]" << std::endl;
+            //     std::cout << "[PathNlopt optimization variables] " << dim_ << " " << traj_pts_num_ << " " << variable_num_ << std::endl;
+            //     std::cout << "[PathNlopt result]: " << result << std::endl;
+            std::cout << "[PathNlopt optimal value, f_smoothness, f_distance, f_feasibility ]: " << optimal_value_ << ",    " << f_smoothness_ << ",    " << f_distance_ << ",    " << f_feasibility_ << std::endl;
+            std::cout << "[PathNlopt iteration count]: " << inloop_ << std::endl;
         }
-        catch (std::exception &e)
-        {
-            std::cout << e.what() << std::endl;
-            break;
-        }
+    }
+    catch (std::exception &e)
+    {
+        std::cout << e.what() << std::endl;
+        // break;
+    }
 
+    // feasloop_++;
+    // last_f_feasibility_ = f_feasibility_;
 
-        feasloop_++;
-        last_f_feasibility_ = f_feasibility_;
+    // k_feas_ = 10 * k_feas_;
 
-        k_feas_ = 10 * k_feas_;
+    // if (feasloop_ > 10)
+    // {
+    //     std::cout << "[PathNlopt ========== feasloop over 10, break ============ PathNlopt]" << std::endl;
+    //     break;
+    // }
 
-        if (feasloop_ > 10)
-        {
-            std::cout << "[PathNlopt ========== feasloop over 10, break ============ PathNlopt]" << std::endl;
-            break;
-        }
-
-        // } while (std::abs(f_feasibility_ - last_f_feasibility_) > 1);
+    // } while (std::abs(f_feasibility_ - last_f_feasibility_) > 1);
     // } while (f_feasibility_ > 1);
-    } while (false);
+    // } while (false);
     // } while (feasloop_ < 2);
 
     // 检查碰撞
@@ -156,14 +154,14 @@ double PathNlopt::costFunction(const std::vector<double> &x, std::vector<double>
     PathNlopt *opt = reinterpret_cast<PathNlopt *>(func_data);
     double cost;
 
-    static int all = 0;
-    std::chrono::system_clock::time_point t1, t2;
-    t1 = std::chrono::system_clock::now();
+    // static int all = 0;
+    // std::chrono::system_clock::time_point t1, t2;
+    // t1 = std::chrono::system_clock::now();
     opt->combineCost(x, grad, cost);
-    t2 = std::chrono::system_clock::now();
-    std::cout << opt->inloop_ << "   ";
-    all += std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
-    std::cout << all << " ";
+    // t2 = std::chrono::system_clock::now();
+    // std::cout << opt->inloop_ << "   ";
+    // all += std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
+    // std::cout << all << " ";
 
     opt->inloop_++;
 
@@ -182,31 +180,19 @@ void PathNlopt::combineCost(const std::vector<double> &x, std::vector<double> &g
     Eigen::MatrixXd g_feasibility = Eigen::MatrixXd::Zero(3, traj_pts_num_);
 
     calcSmoothnessCost(optimize_traj_, f_smoothness, g_smoothness);
-    // f_combine += k_feas_ * lambda_smoothness_ * f_smoothness;
-    // grad_3D += k_feas_ * lambda_smoothness_ * g_smoothness;
     f_combine += lambda_smoothness_ * f_smoothness;
     grad_3D += lambda_smoothness_ * g_smoothness;
     f_smoothness_ = f_smoothness;
 
-    // publishGrad(optimize_traj_, g_smoothness, "map", sgrad_pub_);
-
     calcDistanceCost(optimize_traj_, f_distance, g_distance);
-    // f_combine += k_feas_ * lambda_distance_ * f_distance;
-    // grad_3D += k_feas_ * lambda_distance_ * g_distance;
     f_combine += lambda_distance_ * f_distance;
     grad_3D += lambda_distance_ * g_distance;
     f_distance_ = f_distance;
 
-    // publishGrad(optimize_traj_, g_distance, "map", dgrad_pub_);
-
     calcFeasibilityCost(optimize_traj_, f_feasibility, g_feasibility);
-    f_combine += k_feas_ * lambda_feasibility_ * f_feasibility;
-    grad_3D += k_feas_ * lambda_feasibility_ * g_feasibility;
-    // f_combine += lambda_feasibility_ * f_feasibility;
-    // grad_3D += lambda_feasibility_ * g_feasibility;
+    f_combine += lambda_feasibility_ * f_feasibility;
+    grad_3D += lambda_feasibility_ * g_feasibility;
     f_feasibility_ = f_feasibility;
-
-    // publishGrad(optimize_traj_, g_feasibility, "map", fgrad_pub_);
 
     grad_3D.col(0) = Eigen::Vector3d{0, 0, 0};
     grad_3D.col(1) = Eigen::Vector3d{0, 0, 0};
@@ -218,9 +204,7 @@ void PathNlopt::combineCost(const std::vector<double> &x, std::vector<double> &g
     // for (int i = 0; i < grad_3D.cols(); i++) // 不优化z轴
     //     grad_3D(2, i) = 0;
 
-    // publishGrad(optimize_traj_, grad_3D, "map", agrad_pub_);
-
-    printf("origin %f %f %f %f\n", f_smoothness, f_distance, f_feasibility, f_combine);
+    // printf("origin %f %f %f %f\n", f_combine, f_smoothness, f_distance, f_feasibility);
 
     MatrixXd2Vector(grad_3D, grad, traj_pts_num_, dim_);
 }
@@ -351,8 +335,8 @@ void PathNlopt::calcDistanceCost(const Eigen::MatrixXd &q, double &cost, Eigen::
 
     for (int i = 1; i < q.cols() - 1; i++)
     {
-        dist = map_ptr_->getDist(Eigen::Vector3d{q.col(i)[0],q.col(i)[1],q.col(i)[2]});
-        dist_grad = map_ptr_->getGrad(Eigen::Vector3d{q.col(i)[0],q.col(i)[1],q.col(i)[2]});
+        dist = map_ptr_->getDist(Eigen::Vector3d{q.col(i)[0], q.col(i)[1], q.col(i)[2]});
+        dist_grad = map_ptr_->getGrad(Eigen::Vector3d{q.col(i)[0], q.col(i)[1], q.col(i)[2]});
         // map_ptr_->getDistAndGrad(q.col(i), dist, dist_grad);
         if (dist_grad.norm() > 1e-4)
             dist_grad.normalize();

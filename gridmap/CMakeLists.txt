@@ -33,7 +33,9 @@ include_directories(
   ${OpenCV_INCLUDE_DIRS}
 )
 
-link_directories(${PCL_LIBRARY_DIRS})
+# include_directories("/usr/include/eigen3")
+
+# link_directories(${PCL_LIBRARY_DIRS})
 
 add_library(gridmap
   include/PlanMapBase.hpp

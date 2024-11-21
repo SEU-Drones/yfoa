@@ -3,7 +3,7 @@
  * @Author:       yong
  * @Date: 2022-10-19
  * @LastEditors: Please set LastEditors
- * @LastEditTime: 2024-07-02 14:53:10
+ * @LastEditTime: 2024-11-21 20:35:23
  * @Description:
  * @Subscriber:
  * @Publisher:
@@ -47,7 +47,7 @@ void MissionXYZ::init(ros::NodeHandle node)
 
     wps_pub_ = node.advertise<yf_manager::WayPoints>("/mission/waypoints", 10, this);
     setpoint_raw_local_pub_ = node.advertise<mavros_msgs::PositionTarget>("/mavros/setpoint_raw/local", 10);
-    
+
     poscmds_vis_pub_ = node.advertise<sensor_msgs::PointCloud2>("/mission/poscmds_vis", 10);
     posactual_vis_pub_ = node.advertise<sensor_msgs::PointCloud2>("/mission/posactual_vis", 10);
 
@@ -57,7 +57,7 @@ void MissionXYZ::init(ros::NodeHandle node)
 
     time_forward_ = 1.0;
     receive_traj_ = false;
-    
+
     changeMissionState(mission_fsm_state_, MISSION_STATE::IDLE);
 
     pos_cmds_.empty();
@@ -427,6 +427,8 @@ void MissionXYZ::sendCmd(Eigen::Vector3d pos_sp, Eigen::Vector3d vel_sp, Eigen::
         pos_setpoint.type_mask = 0b100111000000;
     else if (cmode == ControlMode::POSVELACCYAW)
         pos_setpoint.type_mask = 0b100000000000;
+    else if (cmode == ControlMode::VEL)
+        pos_setpoint.type_mask = 0b110000000111;
 
     pos_setpoint.coordinate_frame = 1;
 
@@ -450,7 +452,7 @@ void MissionXYZ::cmdCallback(const ros::TimerEvent &e)
     if (!receive_traj_)
     {
         // 进入offboard但是还没有生成路径时，发送以下期望点
-        sendCmd(pos_sp_, vel_sp_, acc_sp_, yaw_sp_, ControlMode::POSYAW);
+        sendCmd(Eigen::Vector3d{0, 0, 0}, Eigen::Vector3d{0, 0, 0}, Eigen::Vector3d{0, 0, 0}, 0, ControlMode::VEL);
     }
     else
     {
@@ -494,14 +496,16 @@ void MissionXYZ::cmdCallback(const ros::TimerEvent &e)
 
         yaw_sp_ = yaw_yawdot.first;
 
-        sendCmd(pos_sp_, vel_sp_, acc_sp_, yaw_sp_, ControlMode::POSVELYAW);
+        sendCmd(pos_sp_, vel_sp_, acc_sp_, yaw_sp_, control_mode_);
+
+        std::cout << time_now.toSec() << " " << pos_sp_.transpose() << std::endl;
     }
 
     // std::vector<Eigen::Vector3d> pos_cmds;
     pos_cmds_.push_back(pos_sp_);
     publishPoints(pos_cmds_, poscmds_vis_pub_);
 
-    pos_actual_.push_back(Eigen::Vector3d{odom_.pose.pose.position.x,odom_.pose.pose.position.y,odom_.pose.pose.position.z});
+    pos_actual_.push_back(Eigen::Vector3d{odom_.pose.pose.position.x, odom_.pose.pose.position.y, odom_.pose.pose.position.z});
     publishPoints(pos_actual_, posactual_vis_pub_);
 
     // std::cout << "[mission] " << yaw_sp_ << ", " << yaw_sp_ * 53.7 << std::endl;
@@ -514,7 +518,7 @@ double MissionXYZ::quaternion_to_yaw(geometry_msgs::Quaternion &q)
     double x = q.x;
     double y = q.y;
     double z = q.z;
- 
+
     // 计算偏航角（yaw）
     double yaw = atan2(2.0 * (z * w + x * y), 1.0 - 2.0 * (y * y + z * z));
     return yaw;

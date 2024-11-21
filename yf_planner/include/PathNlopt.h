@@ -71,6 +71,14 @@ public:
     void setOptVar(Eigen::MatrixXd opt_var);
     void setMinDist(double min);
 
+    void setPhysicLimits(double max_vel, double max_acc)
+    {
+        max_vel_ = max_vel;
+        max_acc_ = max_acc;
+    };
+
+    void setTimeInterval(double time_interval) { time_interval_ = time_interval; };
+
     // 优化主程序
     void optimize();
 

@@ -94,15 +94,15 @@ bool HybirdAstar::isOccupied(Eigen::Vector3d pos, double thr)
     return map_ptr_->isOccupied(pos);
   else
   {
-    if (map_ptr_->getDist(pos)<thr)
+    if (map_ptr_->getDist(pos) < thr)
       return true;
     else
       return false;
   }
 }
 
-int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen::Vector3d start_a, 
-                        Eigen::Vector3d end_pt, Eigen::Vector3d end_v, 
+int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen::Vector3d start_a,
+                        Eigen::Vector3d end_pt, Eigen::Vector3d end_v,
                         bool init, double horizon, bool dynamic, double time_start)
 {
   clearLastSearchData();
@@ -133,7 +133,7 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
   end_index = PosToIndex(end_pt);
   cur_node->f_score = lambda_heu_ * estimateHeuristic(cur_node->state, end_state, time_to_goal, max_vel_);
   cur_node->node_state = NodeState::IN_OPEN_SET;
-  
+
   use_node_num_ += 1;
   open_set_.push(cur_node);
   if (dynamic)
@@ -158,7 +158,7 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
   {
     cur_node = open_set_.top();
     open_set_.pop();
-    
+
     // Terminate?
     bool reach_horizon = (cur_node->state.head(3) - start_pt).norm() >= horizon;
     bool near_end = abs(cur_node->index(0) - end_index(0)) <= tolerance &&
@@ -220,8 +220,7 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
         return NO_PATH;
       }
     }
-    
-    
+
     cur_node->node_state = NodeState::IN_CLOSE_SET;
     iter_num_ += 1;
 
@@ -231,7 +230,7 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
     std::vector<PathNodePtr> tmp_expand_nodes;
     std::vector<Eigen::Vector3d> inputs;
     std::vector<double> durations;
-    
+
     if (init_search)
     {
       inputs.push_back(start_acc_);
@@ -245,21 +244,21 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
     }
     else
     {
-      for (double ax = -max_acc_; ax <= max_acc_ + 1e-3; ax += max_acc_ * res)
-        for (double ay = -max_acc_; ay <= max_acc_ + 1e-3; ay += max_acc_ * res)
-          {
-            Eigen::Vector3d um;
-            um << ax, ay, 0;
-            inputs.push_back(um);
-          }
       // for (double ax = -max_acc_; ax <= max_acc_ + 1e-3; ax += max_acc_ * res)
       //   for (double ay = -max_acc_; ay <= max_acc_ + 1e-3; ay += max_acc_ * res)
-      //     for (double az = -max_acc_; az <= max_acc_ + 1e-3; az += max_acc_ * res)
       //     {
       //       Eigen::Vector3d um;
-      //       um << ax, ay, az;
+      //       um << ax, ay, 0;
       //       inputs.push_back(um);
       //     }
+      for (double ax = -max_acc_; ax <= max_acc_ + 1e-3; ax += max_acc_ * res)
+        for (double ay = -max_acc_; ay <= max_acc_ + 1e-3; ay += max_acc_ * res)
+          for (double az = -max_acc_; az <= max_acc_ + 1e-3; az += max_acc_ * res)
+          {
+            Eigen::Vector3d um;
+            um << ax, ay, az;
+            inputs.push_back(um);
+          }
       for (double tau = time_res * max_tau_; tau <= max_tau_; tau += time_res * max_tau_)
       {
         durations.push_back(tau);
@@ -280,7 +279,7 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
 
         // for log
         all_motions_.push_back(std::make_pair(cur_state, Eigen::Vector4d{um(0), um(1), um(2), tau}));
-        
+
         // Check if in close set
         PathNodePtr pro_node = dynamic ? expanded_nodes_.find(pro_id, pro_t_id) : expanded_nodes_.find(pro_id);
         if (pro_node != NULL && pro_node->node_state == NodeState::IN_CLOSE_SET)
@@ -381,7 +380,7 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
               pro_node->time = cur_node->time + tau;
               pro_node->time_idx = TimeToIndex(pro_node->time);
             }
-            
+
             tmp_expand_nodes.push_back(pro_node);
 
             use_node_num_ += 1;
@@ -431,7 +430,7 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
   return NO_PATH;
 }
 
-void HybirdAstar::retrievePath(PathNodePtr end_node, std::vector<PathNodePtr>& path_nodes)
+void HybirdAstar::retrievePath(PathNodePtr end_node, std::vector<PathNodePtr> &path_nodes)
 {
   PathNodePtr cur_node = end_node;
   path_nodes.push_back(cur_node);
@@ -585,7 +584,7 @@ double HybirdAstar::estimateHeuristic(Eigen::VectorXd x1, Eigen::VectorXd x2, do
   // optimal_time = 1;
   // return (x2.head(3) - x1.head(3)).norm();
 
-  //J = \int u^2 dt + \rho T = -c1/(3*T^3) - c2/(2*T^2) - c3/T + w_time_*T;
+  // J = \int u^2 dt + \rho T = -c1/(3*T^3) - c2/(2*T^2) - c3/T + w_time_*T;
 
   const Vector3d dp = x2.head(3) - x1.head(3);
   const Vector3d v0 = x1.segment(3, 3);
@@ -725,7 +724,8 @@ std::vector<PathNodePtr> HybirdAstar::getVisitedNodes()
   std::priority_queue<PathNodePtr, std::vector<PathNodePtr>, NodeComparator> temp_queue;
   temp_queue = open_set_;
   int num = temp_queue.size();
-  for(int i=0; i<num; i++){
+  for (int i = 0; i < num; i++)
+  {
 
     pathNode_list.push_back(temp_queue.top());
     temp_queue.pop();
@@ -761,7 +761,8 @@ std::vector<Eigen::Vector3d> HybirdAstar::getVisitedPath(double delta_t)
   std::priority_queue<PathNodePtr, std::vector<PathNodePtr>, NodeComparator> temp_queue;
   temp_queue = open_set_;
   int num = temp_queue.size();
-  for(int i=0; i<num; i++){
+  for (int i = 0; i < num; i++)
+  {
     node = temp_queue.top();
     temp_queue.pop();
 
@@ -786,9 +787,9 @@ std::vector<Eigen::Vector3d> HybirdAstar::getAllMotions(double delta_t)
   Eigen::Vector3d um;
   double duration;
 
-  for(int i=0; i<all_motions_.size(); i++)
+  for (int i = 0; i < all_motions_.size(); i++)
   {
-    um = Eigen::Vector3d{all_motions_[i].second[0],all_motions_[i].second[1],all_motions_[i].second[2]};
+    um = Eigen::Vector3d{all_motions_[i].second[0], all_motions_[i].second[1], all_motions_[i].second[2]};
     duration = all_motions_[i].second[3];
     x0 = all_motions_[i].first;
     for (double t = duration; t >= -1e-5; t -= delta_t)
@@ -807,7 +808,7 @@ std::vector<Eigen::Vector3d> HybirdAstar::getAllMotions(double delta_t)
 //   std::vector<double> time_pts;
 //   std::vector<Eigen::Vector3d> points = getKinoTraj(delta_t);
 //   Eigen::MatrixXd wps = Eigen::MatrixXd::Zero(points.size(), 3);
-  
+
 //   for(int i=0; i<points.size(); i++)
 //   {
 //     wps.row(i) = points[i];

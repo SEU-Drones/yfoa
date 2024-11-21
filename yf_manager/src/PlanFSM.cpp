@@ -24,7 +24,7 @@ void PlanFSM::init(std::string filename, ros::NodeHandle &nh)
 
     odometry_sub_ = nh.subscribe("/odom", 1, &PlanFSM::odometryCallback, this);
     waypoints_sub_ = nh.subscribe("/mission/waypoints", 1, &PlanFSM::waypointsCallback, this);
-    bspline_pub_ = nh.advertise<yf_manager::Bspline>("/planner/bspline", 10);    
+    bspline_pub_ = nh.advertise<yf_manager::Bspline>("/planner/bspline", 10);
 
     map_timer_ = nh.createTimer(ros::Duration(0.1), &PlanFSM::updateMapCallback, this);
     fsm_timer_ = nh.createTimer(ros::Duration(0.01), &PlanFSM::execFSMCallback, this);
@@ -32,11 +32,14 @@ void PlanFSM::init(std::string filename, ros::NodeHandle &nh)
     new_occ_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/map/new_occ", 10);
     new_free_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/map/new_free", 10);
     grid_esdf_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/map/grid_esdf", 10);
-    
+
     hybird_pub_ = nh.advertise<nav_msgs::Path>("/planner/hybird_path", 10);
     optpath_pub_ = nh.advertise<nav_msgs::Path>("/planner/optimal_path", 10);
+    hybird_pts_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/planner/hybird_pts", 10);
+    optpath_pts_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/planner/optpath_pts", 10);
+    pts_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/planner/pts", 10);
 
-    nh.param("mission/sample_interval", interval_, 0.1);
+    nh.param("mission/control_point_distance", ctrl_pt_dist_, 0.4);
     nh.param("mission/planning_horizon", planning_hor_, 5.0);
     nh.param("mission/no_replan_thresh", no_replan_thresh_, 1.0);
     nh.param("mission/replan_thresh", replan_thresh_, 1.0);
@@ -233,32 +236,38 @@ void PlanFSM::updateMapCallback(const ros::TimerEvent &)
                                           ros::Time::now(), "map", "base_link"));
 }
 
-// planning
-void PlanFSM::updateTrajInfo(const UniformBspline &position_traj, const ros::Time time_now)
-{
-    trajectory_.start_time_ = time_now;
-    trajectory_.position_traj_ = position_traj;
-    trajectory_.velocity_traj_ = trajectory_.position_traj_.getDerivative();
-    trajectory_.acceleration_traj_ = trajectory_.velocity_traj_.getDerivative();
-    trajectory_.start_pos_ = trajectory_.position_traj_.evaluateDeBoorT(0.0);
-    trajectory_.duration_ = trajectory_.position_traj_.getTimeSum();
-    trajectory_.traj_id_ += 1;
-}
+// // planning
+// void PlanFSM::updateTrajInfo(const UniformBspline &position_traj, const ros::Time time_now)
+// {
+//     trajectory_.start_time_ = time_now;
+//     trajectory_.position_traj_ = position_traj;
+//     trajectory_.velocity_traj_ = trajectory_.position_traj_.getDerivative();
+//     trajectory_.acceleration_traj_ = trajectory_.velocity_traj_.getDerivative();
+//     trajectory_.start_pos_ = trajectory_.position_traj_.evaluateDeBoorT(0.0);
+//     trajectory_.duration_ = trajectory_.position_traj_.getTimeSum();
+//     trajectory_.traj_id_ += 1;
+// }
 
 bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
 {
+    double time_interval;
+    pathnlopt_ptr_->setPhysicLimits(trajectory_.max_vel, trajectory_.max_acc);
+    hybirdastar_ptr_->setPhysicLimits(trajectory_.max_vel, trajectory_.max_acc);
+    time_interval = ctrl_pt_dist_ / trajectory_.max_vel;
+    pathnlopt_ptr_->setTimeInterval(ctrl_pt_dist_ / trajectory_.max_vel);
+
     std::vector<Eigen::Vector3d> search_path, opt_path;
     Eigen::MatrixXd opt_var;
 
     hybirdastar_ptr_->search(start.pos, start.vel, start.acc, end.pos, end.vel, init, planning_hor_);
 
-    search_path = hybirdastar_ptr_->getKinoTraj(interval_);
+    search_path = hybirdastar_ptr_->getKinoTraj(time_interval);
 
     if (search_path.size() < 1)
         return false;
 
-    std::cout<<"search "<< search_path.size() <<std::endl;
     publishPath(search_path, hybird_pub_);
+    publishPoints(search_path, hybird_pts_pub_);
 
     opt_var.resize(3, search_path.size());
     for (int i = 0; i < search_path.size(); i++)
@@ -268,20 +277,27 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     pathnlopt_ptr_->optimize();
 
     opt_path = pathnlopt_ptr_->getOptimizeTraj();
-    
-    std::cout<<"opt "<< opt_path.size() <<std::endl;
+
     publishPath(opt_path, optpath_pub_);
+    publishPoints(search_path, optpath_pts_pub_);
 
-    updateTrajInfo(UniformBspline(pathnlopt_ptr_->getMatrixOptimizeTraj(), 3, interval_), ros::Time::now());
+    // updateTrajInfo(UniformBspline(pathnlopt_ptr_->getMatrixOptimizeTraj(), 3, time_interval), ros::Time::now());
+    // trajectory_.start_time_ = ros::Time::now();
+    trajectory_.position_traj_ = UniformBspline(pathnlopt_ptr_->getMatrixOptimizeTraj(), 3, time_interval);
+    trajectory_.velocity_traj_ = trajectory_.position_traj_.getDerivative();
+    trajectory_.acceleration_traj_ = trajectory_.velocity_traj_.getDerivative();
+    trajectory_.start_pos_ = trajectory_.position_traj_.evaluateDeBoorT(0.0);
+    trajectory_.duration_ = trajectory_.position_traj_.getTimeSum();
+    trajectory_.traj_id_ += 1;
 
-    MAVTraj *info = &trajectory_;
+    // MAVTraj *info = &trajectory_;
 
     yf_manager::Bspline bspline;
     bspline.order = 3;
-    bspline.start_time = info->start_time_;
-    bspline.traj_id = info->traj_id_;
+    bspline.start_time = trajectory_.start_time_;
+    bspline.traj_id = trajectory_.traj_id_;
 
-    Eigen::MatrixXd pos_pts = info->position_traj_.getControlPoint();
+    Eigen::MatrixXd pos_pts = trajectory_.position_traj_.getControlPoint();
     bspline.pos_pts.reserve(pos_pts.cols());
     for (int i = 0; i < pos_pts.cols(); ++i)
     {
@@ -292,7 +308,7 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
         bspline.pos_pts.push_back(pt);
     }
 
-    Eigen::VectorXd knots = info->position_traj_.getKnot();
+    Eigen::VectorXd knots = trajectory_.position_traj_.getKnot();
     bspline.knots.reserve(knots.rows());
     for (int i = 0; i < knots.rows(); ++i)
     {
@@ -326,9 +342,9 @@ void PlanFSM::odometryCallback(const nav_msgs::OdometryConstPtr &msg)
 
 void PlanFSM::waypointsCallback(const yf_manager::WayPointsConstPtr &msg)
 {
-    trajectory_.end_mavstate.pos << msg->pos_x[0], msg->pos_y[0], msg->pos_z[0];
-    trajectory_.end_mavstate.vel.setZero();
-    trajectory_.end_mavstate.acc.setZero();
+    target_mavstate_.pos << msg->pos_x[0], msg->pos_y[0], msg->pos_z[0];
+    target_mavstate_.vel.setZero();
+    target_mavstate_.acc.setZero();
 
     trajectory_.max_vel = msg->max_vel[0];
     trajectory_.max_acc = msg->max_acc[0];
@@ -395,10 +411,13 @@ void PlanFSM::execFSMCallback(const ros::TimerEvent &e)
     case FsmState::GEN_NEW_TRAJ:
     {
         // 获取当前期望的目标点
-        getLocalTarget(target_mavstate_, current_mavstate_, trajectory_.end_mavstate, planning_hor_);
+        // 目标是否处在障碍物内部
+        trajectory_.start_mavstate = current_mavstate_;
+        trajectory_.start_time_ = ros::Time::now();
 
-        // std::cout << current_mavstate_.pos.transpose() << "  " << target_mavstate_.pos.transpose() << std::endl;
-        bool success = callReplan(current_mavstate_, target_mavstate_, false);
+        getLocalTarget(trajectory_.end_mavstate, trajectory_.start_mavstate, target_mavstate_, planning_hor_);
+
+        bool success = callReplan(trajectory_.start_mavstate, trajectory_.end_mavstate, false);
 
         if (success)
             changeFSMExecState(FsmState::EXEC_TRAJ, "FSM");
@@ -410,26 +429,26 @@ void PlanFSM::execFSMCallback(const ros::TimerEvent &e)
     case FsmState::EXEC_TRAJ:
     {
         ros::Time time_now = ros::Time::now();
-        MAVTraj *info = &trajectory_;
-        double t_cur = (time_now - info->start_time_).toSec();
-        t_cur = std::min(info->duration_, t_cur);
 
-        Eigen::Vector3d pos = info->position_traj_.evaluateDeBoorT(t_cur);
+        double t_cur = (time_now - trajectory_.start_time_).toSec();
+        t_cur = std::min(trajectory_.duration_, t_cur);
+
+        Eigen::Vector3d pos = trajectory_.position_traj_.evaluateDeBoorT(t_cur);
 
         /* && (end_pt_ - pos).norm() < 0.5 */
-        if (t_cur > info->duration_ - 1e-2) // 轨迹结束
+        if (t_cur > trajectory_.duration_ - 1e-2) // 轨迹结束
         {
             have_target_ = false;
 
             changeFSMExecState(FsmState::WAIT_TARGET, "FSM");
             return;
         }
-        else if ((trajectory_.end_mavstate.pos - pos).norm() < no_replan_thresh_) // 到达终点附近，不再规划
+        else if ((target_mavstate_.pos - pos).norm() < no_replan_thresh_) // 到达终点附近，不再规划
         {
             // cout << "near end" << endl;
             return;
         }
-        else if ((info->start_pos_ - pos).norm() < replan_thresh_)
+        else if ((trajectory_.start_pos_ - pos).norm() < replan_thresh_)
         {
             // cout << "near start" << endl;
             return;
@@ -444,18 +463,22 @@ void PlanFSM::execFSMCallback(const ros::TimerEvent &e)
     case FsmState::REPLAN_TRAJ:
     {
         // 获取当前期望的目标点
-        MAVTraj *info = &trajectory_;
         ros::Time time_now = ros::Time::now();
-        double t_cur = (time_now - info->start_time_).toSec();
+        double t_cur = (time_now - trajectory_.start_time_).toSec();
 
-        current_mavstate_.pos = info->position_traj_.evaluateDeBoorT(t_cur);
-        current_mavstate_.vel = info->velocity_traj_.evaluateDeBoorT(t_cur);
-        current_mavstate_.acc = info->acceleration_traj_.evaluateDeBoorT(t_cur);
+        trajectory_.start_mavstate.pos = trajectory_.position_traj_.evaluateDeBoorT(t_cur);
+        trajectory_.start_mavstate.vel = trajectory_.velocity_traj_.evaluateDeBoorT(t_cur);
+        trajectory_.start_mavstate.acc = trajectory_.acceleration_traj_.evaluateDeBoorT(t_cur);
+        trajectory_.start_time_ = time_now;
 
-        getLocalTarget(target_mavstate_, current_mavstate_, trajectory_.end_mavstate, planning_hor_);
-        // std::cout << current_mavstate_.pos.transpose() << "  " << target_mavstate_.pos.transpose() << std::endl;
+        getLocalTarget(trajectory_.end_mavstate, trajectory_.start_mavstate, target_mavstate_, planning_hor_);
+        // std::cout << trajectory_.start_mavstate.pos.transpose() << "  " << target_mavstate_.pos.transpose() << std::endl;
 
-        bool success = callReplan(current_mavstate_, target_mavstate_, false);
+        bool success = callReplan(trajectory_.start_mavstate, trajectory_.end_mavstate, true);
+
+        std::vector<Eigen::Vector3d> points;
+        points.push_back(trajectory_.start_mavstate.pos);
+        publishPoints(points, pts_pub_);
 
         if (success)
             changeFSMExecState(FsmState::EXEC_TRAJ, "FSM");
@@ -544,4 +567,27 @@ void PlanFSM::publishPath(std::vector<Eigen::Vector3d> path, ros::Publisher pub)
     }
     path_ros.header.frame_id = "map";
     pub.publish(path_ros);
+}
+
+void PlanFSM::publishPoints(std::vector<Eigen::Vector3d> points, ros::Publisher pub)
+{
+    pcl::PointXYZ pt;
+    pcl::PointCloud<pcl::PointXYZ> cloud;
+
+    for (int i = 0; i < points.size(); i++)
+    {
+        pt.x = points[i](0);
+        pt.y = points[i](1);
+        pt.z = points[i](2);
+        cloud.points.push_back(pt);
+    }
+
+    cloud.width = cloud.points.size();
+    cloud.height = 1;
+    cloud.is_dense = true;
+    cloud.header.frame_id = "map";
+
+    sensor_msgs::PointCloud2 cloud_msg;
+    pcl::toROSMsg(cloud, cloud_msg);
+    pub.publish(cloud_msg);
 }

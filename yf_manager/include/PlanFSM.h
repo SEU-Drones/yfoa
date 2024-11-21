@@ -70,14 +70,14 @@ struct MAVState
 
 struct MAVTraj
 {
-    // 全局的轨迹
-    MAVState start_mavstate, end_mavstate;
     std::vector<MAVState> waypints;
 
     double max_vel;
     double max_acc;
 
     // 局部的轨迹
+    MAVState start_mavstate, end_mavstate;
+
     int traj_id_;
     double duration_;
     double global_time_offset; // This is because when the local traj finished and is going to switch back to the global traj, the global traj time is no longer matches the world time.
@@ -93,7 +93,7 @@ private:
     InESDFMap::Ptr map_ptr_;
     HybirdAstar::Ptr hybirdastar_ptr_;
 
-    double interval_;
+    double ctrl_pt_dist_;
     double planning_hor_;
 
     MAVTraj trajectory_;
@@ -134,10 +134,12 @@ private:
 
     ros::Publisher new_occ_pub_, new_free_pub_, grid_esdf_pub_;
     ros::Publisher hybird_pub_, optpath_pub_;
+    ros::Publisher hybird_pts_pub_, optpath_pts_pub_, pts_pub_;
 
     void publishNewOcc();
     void publishNewFree();
     void publishPath(std::vector<Eigen::Vector3d> path, ros::Publisher pub);
+    void publishPoints(std::vector<Eigen::Vector3d> points, ros::Publisher pub);
 
 public:
     PlanFSM(/* args */);

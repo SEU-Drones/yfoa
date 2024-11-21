@@ -23,6 +23,9 @@ find_package(catkin REQUIRED COMPONENTS
 
 find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(PCL 1.7 REQUIRED)
+
+include_directories("/usr/include/eigen3")
 
 include_directories(
   SYSTEM
@@ -30,6 +33,7 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${Eigen3_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
+  ${PCL_INCLUDE_DIRS}
 )
 
 add_message_files(
@@ -67,4 +71,5 @@ add_executable(MissionXYZ_node
   )
 target_link_libraries(MissionXYZ_node 
   ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES}
   )
