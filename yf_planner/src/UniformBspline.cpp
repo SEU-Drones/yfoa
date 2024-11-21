@@ -24,15 +24,18 @@ void UniformBspline::setUniformBspline(const Eigen::MatrixXd &points, const int 
 
     if (i <= p_)
     {
-      u_(i) = double(-p_ + i) * interval_;
+      // u_(i) = double(-p_ + i) * interval_;
+      u_(i) = 0.0; // First p+1 knots are zero
     }
     else if (i > p_ && i <= m_ - p_)
     {
-      u_(i) = u_(i - 1) + interval_;
+      // u_(i) = u_(i - 1) + interval_;
+      u_(i) = (i - p_) * interval_;  // Uniform interval in the middle
     }
     else if (i > m_ - p_)
     {
-      u_(i) = u_(i - 1) + interval_;
+      // u_(i) = u_(i - 1) + interval_;
+      u_(i) = 1.0 * n_ * interval_;  // Last p+1 knots are set to the end value
     }
   }
 }

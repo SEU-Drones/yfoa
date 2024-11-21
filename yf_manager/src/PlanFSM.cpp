@@ -27,7 +27,7 @@ void PlanFSM::init(std::string filename, ros::NodeHandle &nh)
     bspline_pub_ = nh.advertise<yf_manager::Bspline>("/planner/bspline", 10);
 
     map_timer_ = nh.createTimer(ros::Duration(0.1), &PlanFSM::updateMapCallback, this);
-    fsm_timer_ = nh.createTimer(ros::Duration(0.01), &PlanFSM::execFSMCallback, this);
+    fsm_timer_ = nh.createTimer(ros::Duration(0.05), &PlanFSM::execFSMCallback, this);
 
     new_occ_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/map/new_occ", 10);
     new_free_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/map/new_free", 10);
@@ -254,7 +254,9 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     pathnlopt_ptr_->setPhysicLimits(trajectory_.max_vel, trajectory_.max_acc);
     hybirdastar_ptr_->setPhysicLimits(trajectory_.max_vel, trajectory_.max_acc);
     time_interval = ctrl_pt_dist_ / trajectory_.max_vel;
-    pathnlopt_ptr_->setTimeInterval(ctrl_pt_dist_ / trajectory_.max_vel);
+    // time_interval = 0.1;
+
+    pathnlopt_ptr_->setTimeInterval(time_interval);
 
     std::vector<Eigen::Vector3d> search_path, opt_path;
     Eigen::MatrixXd opt_var;
@@ -262,6 +264,9 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     hybirdastar_ptr_->search(start.pos, start.vel, start.acc, end.pos, end.vel, init, planning_hor_);
 
     search_path = hybirdastar_ptr_->getKinoTraj(time_interval);
+
+    std::cout<<ros::Time::now().toSec()<<" hy input start: "<<start.pos.transpose()<<std::endl;
+    std::cout<<ros::Time::now().toSec()<<" hy output start: "<<search_path[0].transpose()<<std::endl;
 
     if (search_path.size() < 1)
         return false;
@@ -278,6 +283,9 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
 
     opt_path = pathnlopt_ptr_->getOptimizeTraj();
 
+    std::cout<<ros::Time::now().toSec()<<" opt output start: "<<opt_path[0].transpose()<<std::endl;
+
+
     publishPath(opt_path, optpath_pub_);
     publishPoints(search_path, optpath_pts_pub_);
 
@@ -288,6 +296,7 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     trajectory_.acceleration_traj_ = trajectory_.velocity_traj_.getDerivative();
     trajectory_.start_pos_ = trajectory_.position_traj_.evaluateDeBoorT(0.0);
     trajectory_.duration_ = trajectory_.position_traj_.getTimeSum();
+    
     trajectory_.traj_id_ += 1;
 
     // MAVTraj *info = &trajectory_;
@@ -469,12 +478,17 @@ void PlanFSM::execFSMCallback(const ros::TimerEvent &e)
         trajectory_.start_mavstate.pos = trajectory_.position_traj_.evaluateDeBoorT(t_cur);
         trajectory_.start_mavstate.vel = trajectory_.velocity_traj_.evaluateDeBoorT(t_cur);
         trajectory_.start_mavstate.acc = trajectory_.acceleration_traj_.evaluateDeBoorT(t_cur);
-        trajectory_.start_time_ = time_now;
+        trajectory_.start_time_ = ros::Time::now();
+
+        std::cout <<ros::Time::now().toSec()<<" start "<< t_cur << " " << trajectory_.start_mavstate.pos.transpose() << std::endl;
 
         getLocalTarget(trajectory_.end_mavstate, trajectory_.start_mavstate, target_mavstate_, planning_hor_);
         // std::cout << trajectory_.start_mavstate.pos.transpose() << "  " << target_mavstate_.pos.transpose() << std::endl;
 
         bool success = callReplan(trajectory_.start_mavstate, trajectory_.end_mavstate, true);
+
+        std::cout <<ros::Time::now().toSec()<< " 0.0 " << trajectory_.position_traj_.evaluateDeBoorT(0.0).transpose() << std::endl;
+        std::cout <<ros::Time::now().toSec()<<" "<< (ros::Time::now() - trajectory_.start_time_).toSec() << " " << trajectory_.position_traj_.evaluateDeBoorT((ros::Time::now() - trajectory_.start_time_).toSec()).transpose() << std::endl;
 
         std::vector<Eigen::Vector3d> points;
         points.push_back(trajectory_.start_mavstate.pos);
