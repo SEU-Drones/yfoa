@@ -1,0 +1,80 @@
+<?xml version="1.0"?>
+<launch>
+    <node pkg="yf_manager" name="MissionXYZ_node" type="MissionXYZ_node" output="screen">
+        <remap from="/odom" to="/mavros/local_position/odom"/>
+        <param name="mission/sendOneByOne" value="true" />
+        <param name="mission/wps_threshold" value="2.0" />
+        <param name="mission/control_mode" value="2" />
+
+        <param name="mission/waypoint_num" value="1" />
+
+        <param name="mission/waypoint0_x" value="20.0" />
+        <param name="mission/waypoint0_y" value="0.0" />
+        <param name="mission/waypoint0_z" value="2.0" />
+        <param name="mission/waypoint0_vx" value="2.0" />
+        <param name="mission/waypoint0_vy" value="0.0" />
+        <param name="mission/waypoint0_vz" value="0.0" />
+        <param name="mission/waypoint0_ax" value="2.0" />
+        <param name="mission/waypoint0_ay" value="0.0" />
+        <param name="mission/waypoint0_az" value="0.0" />
+
+        <param name="mission/waypoint1_x" value="20.0" />
+        <param name="mission/waypoint1_y" value="20.0" />
+        <param name="mission/waypoint1_z" value="2.0" />
+        <param name="mission/waypoint1_vx" value="2.0" />
+        <param name="mission/waypoint1_vy" value="0.0" />
+        <param name="mission/waypoint1_vz" value="0.0" />
+        <param name="mission/waypoint1_ax" value="2.0" />
+        <param name="mission/waypoint1_ay" value="0.0" />
+        <param name="mission/waypoint1_az" value="0.0" />
+
+        <param name="mission/waypoint2_x" value="0.0" />
+        <param name="mission/waypoint2_y" value="20.0" />
+        <param name="mission/waypoint2_z" value="2.0" />
+        <param name="mission/waypoint2_vx" value="2.0" />
+        <param name="mission/waypoint2_vy" value="0.0" />
+        <param name="mission/waypoint2_vz" value="0.0" />
+        <param name="mission/waypoint2_ax" value="2.0" />
+        <param name="mission/waypoint2_ay" value="0.0" />
+        <param name="mission/waypoint2_az" value="0.0" />
+
+        <param name="mission/waypoint3_x" value="0.0" />
+        <param name="mission/waypoint3_y" value="0.0" />
+        <param name="mission/waypoint3_z" value="2.0" />
+        <param name="mission/waypoint3_vx" value="2.0" />
+        <param name="mission/waypoint3_vy" value="0.0" />
+        <param name="mission/waypoint3_vz" value="0.0" />
+        <param name="mission/waypoint3_ax" value="2.0" />
+        <param name="mission/waypoint3_ay" value="0.0" />
+        <param name="mission/waypoint3_az" value="0.0" />
+    </node>
+
+    <node pkg="yf_manager" name="PlanFSM_node" type="PlanFSM_node" output="screen">
+        <remap from="/odom" to="/mavros/local_position/odom"/>
+        <!-- <remap from="/depth" to="/D455/depth/image_rect_raw"/> -->
+        <remap from="/depth" to="/realsense_plugin/camera/depth/image_raw"/>
+
+        <param name="paramfile/path" value="$(find yf_manager)/config/yf.yaml" type="string"/>
+
+        <param name="mission/sample_interval" value='0.1'/>
+        <param name="mission/planning_horizon" value='15.0'/>
+        <param name="mission/no_replan_thresh" value='1.0'/>
+        <param name="mission/replan_thresh" value='1.0'/>
+    </node>
+
+
+    <!-- 启动MAVROS -->
+        <!-- <param name="fcu_url" value="/dev/ttyUSB0:115200" /> -->    
+        <!-- udp://:14550@ -->        
+    <!-- <arg name="respawn_mavros" default="false" />
+    <node pkg="mavros" type="mavros_node" name="mavros" required="$(eval not respawn_mavros)" clear_params="true" output="screen" respawn="$(arg respawn_mavros)">
+        <param name="fcu_url" value="udp://:14540@localhost:14557" />
+        <param name="gcs_url" value="" />
+        <param name="target_system_id" value="1" />
+        <param name="target_component_id" value="1" />
+        <param name="fcu_protocol" value="v2.0" />
+        <rosparam command="load" file="$(find tools)/config/mavros_config/px4_pluginlists.yaml" />
+        <rosparam command="load" file="$(find tools)/config/mavros_config/px4_config.yaml" />
+    </node> -->
+
+</launch>

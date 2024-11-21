@@ -1,0 +1,7 @@
+<launch>
+
+    <node pkg="gridmap" name="global_gridmap_node" type="global_gridmap_node" output="screen" />
+
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find yf_manager)/launch/yf.rviz" required="true" />
+
+</launch>
