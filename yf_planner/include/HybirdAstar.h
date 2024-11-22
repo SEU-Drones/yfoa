@@ -3,6 +3,7 @@
 
 #include <boost/functional/hash.hpp>
 #include <iostream>
+#include <fstream>
 #include <queue>
 #include <string>
 #include <map>
@@ -176,6 +177,8 @@ public:
 
   std::vector<Eigen::Vector3d> getAllMotions(double delta_t);
   std::vector<std::pair<Eigen::Matrix<double, 6, 1>, Eigen::Vector4d>> all_motions_;
+
+  void saveTrjToTxt(double delta_t, std::string filename);
 
   // void parameterTraj(double start_time, double delta_t);
   // void saveTrajToTxt(std::string filename);

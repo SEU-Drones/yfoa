@@ -694,6 +694,103 @@ std::vector<Eigen::Vector3d> HybirdAstar::getKinoTraj(double delta_t)
   return state_list;
 }
 
+void HybirdAstar::saveTrjToTxt(double delta_t, std::string filename)
+{
+  std::ofstream output_file(filename);
+  // 检查文件是否成功打开
+  if (!output_file)
+  {
+      std::cerr << "无法打开文件" << std::endl;
+      exit(0);
+  }
+
+  std::vector<Eigen::Vector3d> pos_list;
+  std::vector<Eigen::Vector3d> vel_list;
+  std::vector<Eigen::Vector3d> acc_list;
+
+  /* ---------- get traj of searching ---------- */
+  PathNodePtr node = path_nodes_.back();
+  Eigen::Matrix<double, 6, 1> x0, xt;
+
+  while (node->cameFrom != NULL)
+  {
+    Eigen::Vector3d um = node->input;
+    double duration = node->duration;
+    x0 = node->cameFrom->state;
+
+    for (double t = duration; t >= -1e-5; t -= delta_t)
+    {
+      stateTransit(x0, xt, um, t);
+      pos_list.push_back(xt.head(3));
+      vel_list.push_back(xt.tail(3));
+      acc_list.push_back(node->input);
+      std::cout << um.transpose()<<std::endl;
+    }
+    node = node->cameFrom;
+  }
+  reverse(pos_list.begin(), pos_list.end());
+  reverse(vel_list.begin(), vel_list.end());
+  reverse(acc_list.begin(), acc_list.end());
+
+  if (is_shot_succ_)
+  {
+    Vector3d coord;
+    VectorXd poly1d, time(4);
+
+    for (double t = delta_t; t <= t_shot_; t += delta_t)
+    {
+      for (int j = 0; j < 4; j++)
+        time(j) = pow(t, j);
+
+      for (int dim = 0; dim < 3; dim++)
+      {
+        poly1d = coef_shot_.row(dim);
+        coord(dim) = poly1d.dot(time);
+      }
+      pos_list.push_back(coord);
+    }
+
+    for (double t = delta_t; t <= t_shot_; t += delta_t)
+    {
+      time(0) = 0;
+      for (int j = 1; j < 4; j++)
+        time(j) = j*pow(t, j-1);
+
+      for (int dim = 0; dim < 3; dim++)
+      {
+        poly1d = coef_shot_.row(dim);
+        coord(dim) = poly1d.dot(time);
+      }
+      vel_list.push_back(coord);
+    }
+
+    for (double t = delta_t; t <= t_shot_; t += delta_t)
+    {
+      time(0) = 0;
+      time(1) = 0;
+      for (int j = 2; j < 4; j++)
+        time(j) = j*(j-1)*pow(t, j-2);
+
+      for (int dim = 0; dim < 3; dim++)
+      {
+        poly1d = coef_shot_.row(dim);
+        coord(dim) = poly1d.dot(time);
+      }
+      acc_list.push_back(coord);
+    }
+  }
+
+  if (output_file.is_open())
+  {
+    for(int i=0; i<pos_list.size(); i++)
+    output_file << i*delta_t << "," << 0 << ","
+            << pos_list[i][0] << "," << pos_list[i][1] << "," << pos_list[i][2] << ","
+            << vel_list[i][0] << "," << vel_list[i][1] << "," << vel_list[i][2] << ","
+            << acc_list[i][0] << "," << acc_list[i][1] << "," << acc_list[i][2] << "\n";
+  }
+
+}
+
 std::vector<PathNodePtr> HybirdAstar::getPathNodes()
 {
   std::vector<PathNodePtr> pathNode_list;

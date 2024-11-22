@@ -183,7 +183,7 @@ def plot_position_velocity_and_acceleration(time_val, positions, velocities, acc
     return fig
 
 if __name__ == "__main__":
-    file_path = '/home/ly/ws_search/traj.txt'
+    file_path = '/home/ly/ws_yfoa/traj.txt'
     time, heading_angles, positions, velocities, accelerations = read_trajectory_data(file_path)
 
     # 创建3D轨迹图

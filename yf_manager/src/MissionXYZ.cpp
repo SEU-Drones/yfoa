@@ -461,7 +461,7 @@ void MissionXYZ::cmdCallback(const ros::TimerEvent &e)
 
         // std::cout<<t_cur<<" "<<time_now<<" "<<start_time_<<std::endl;
 
-        Eigen::Vector3d pos_f;
+        // Eigen::Vector3d pos_f;
         std::pair<double, double> yaw_yawdot(0, 0);
 
         static ros::Time time_last = ros::Time::now();
@@ -475,8 +475,8 @@ void MissionXYZ::cmdCallback(const ros::TimerEvent &e)
             yaw_yawdot = calculate_yaw(t_cur, pos_sp_, time_now, time_last);
             /*** calculate yaw ***/
 
-            double tf = std::min(traj_duration_, t_cur + 2.0);
-            pos_f = traj_[0].evaluateDeBoorT(tf);
+            // double tf = std::min(traj_duration_, t_cur + 2.0);
+            // pos_f = traj_[0].evaluateDeBoorT(tf);
         }
         else if (t_cur >= traj_duration_)
         {
@@ -488,7 +488,7 @@ void MissionXYZ::cmdCallback(const ros::TimerEvent &e)
             yaw_yawdot.first = last_yaw_;
             yaw_yawdot.second = 0;
 
-            pos_f = pos_sp_;
+            // pos_f = pos_sp_;
         }
         else
         {

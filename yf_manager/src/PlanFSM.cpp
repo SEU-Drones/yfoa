@@ -27,7 +27,7 @@ void PlanFSM::init(std::string filename, ros::NodeHandle &nh)
     bspline_pub_ = nh.advertise<yf_manager::Bspline>("/planner/bspline", 10);
 
     map_timer_ = nh.createTimer(ros::Duration(0.1), &PlanFSM::updateMapCallback, this);
-    fsm_timer_ = nh.createTimer(ros::Duration(0.05), &PlanFSM::execFSMCallback, this);
+    fsm_timer_ = nh.createTimer(ros::Duration(0.1), &PlanFSM::execFSMCallback, this);
 
     new_occ_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/map/new_occ", 10);
     new_free_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/map/new_free", 10);
@@ -253,9 +253,9 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
 {
     double time_interval;
     pathnlopt_ptr_->setPhysicLimits(trajectory_.max_vel, trajectory_.max_acc);
-    hybirdastar_ptr_->setPhysicLimits(trajectory_.max_vel, trajectory_.max_acc);
-    // time_interval = ctrl_pt_dist_ / trajectory_.max_vel;
-    time_interval = 0.1;
+    hybirdastar_ptr_->setPhysicLimits(trajectory_.max_vel/2.0, trajectory_.max_acc/2.0);
+    time_interval = ctrl_pt_dist_ / trajectory_.max_vel;
+    // time_interval = 0.1;
 
     pathnlopt_ptr_->setTimeInterval(time_interval);
 
@@ -275,6 +275,9 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     publishPath(search_path, hybird_pub_);
     publishPoints(search_path, hybird_pts_pub_);
     publishPoints(hybirdastar_ptr_->getAllMotions(0.1), smotions_pub_);
+
+    std::string filename = "/home/ly/ws_yfoa/traj.txt";
+    hybirdastar_ptr_->saveTrjToTxt(0.1, filename);
 
     opt_var.resize(3, search_path.size());
     for (int i = 0; i < search_path.size(); i++)
