@@ -57,7 +57,7 @@
         <param name="paramfile/path" value="$(find yf_manager)/config/yf.yaml" type="string"/>
 
         <param name="mission/control_point_distance" value='0.4'/>
-        <param name="mission/planning_horizon" value='15.0'/>
+        <param name="mission/planning_horizon" value='12.0'/>
         <!-- 到达终点附近，不再规划 -->
         <param name="mission/no_replan_thresh" value='1.0'/>
         <!-- 每段轨迹至少执行的距离 -->

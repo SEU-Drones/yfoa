@@ -134,7 +134,7 @@ private:
 
     ros::Publisher new_occ_pub_, new_free_pub_, grid_esdf_pub_;
     ros::Publisher hybird_pub_, optpath_pub_;
-    ros::Publisher hybird_pts_pub_, optpath_pts_pub_, pts_pub_;
+    ros::Publisher hybird_pts_pub_, optpath_pts_pub_, smotions_pub_, pts_pub_;
 
     void publishNewOcc();
     void publishNewFree();

@@ -3,7 +3,7 @@
  * @Author:       yong
  * @Date: 2022-10-19
  * @LastEditors: Please set LastEditors
- * @LastEditTime: 2024-11-21 20:35:23
+ * @LastEditTime: 2024-11-22 08:26:58
  * @Description:
  * @Subscriber:
  * @Publisher:
@@ -500,12 +500,12 @@ void MissionXYZ::cmdCallback(const ros::TimerEvent &e)
 
         sendCmd(pos_sp_, vel_sp_, acc_sp_, yaw_sp_, control_mode_);
 
-        std::cout <<ros::Time::now().toSec()<<" "<< t_cur << " " << pos_sp_.transpose() << std::endl;
-    }
+        // std::cout <<ros::Time::now().toSec()<<" "<< t_cur << " " << pos_sp_.transpose() << std::endl;
 
-    // std::vector<Eigen::Vector3d> pos_cmds;
-    pos_cmds_.push_back(pos_sp_);
-    publishPoints(pos_cmds_, poscmds_vis_pub_);
+        // std::vector<Eigen::Vector3d> pos_cmds;
+        pos_cmds_.push_back(pos_sp_);
+        publishPoints(pos_cmds_, poscmds_vis_pub_);
+    }
 
     pos_actual_.push_back(Eigen::Vector3d{odom_.pose.pose.position.x, odom_.pose.pose.position.y, odom_.pose.pose.position.z});
     publishPoints(pos_actual_, posactual_vis_pub_);
