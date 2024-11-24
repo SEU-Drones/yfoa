@@ -185,11 +185,18 @@ def plot_position_velocity_and_acceleration(time_val, positions, velocities, acc
 if __name__ == "__main__":
     file_path = '/home/ly/ws_yfoa/traj.txt'
     time, heading_angles, positions, velocities, accelerations = read_trajectory_data(file_path)
-
     # 创建3D轨迹图
     fig_3d = plot_trajectory_3d(positions, heading_angles)
     fig_3d.show()
+    # 创建速度和加速度的2x1子图
+    fig_va = plot_position_velocity_and_acceleration(time, positions, velocities, accelerations)
+    fig_va.show()
 
+    file_path = '/home/ly/ws_yfoa/opttraj.txt'
+    time, heading_angles, positions, velocities, accelerations = read_trajectory_data(file_path)
+    # 创建3D轨迹图
+    fig_3d = plot_trajectory_3d(positions, heading_angles)
+    fig_3d.show()
     # 创建速度和加速度的2x1子图
     fig_va = plot_position_velocity_and_acceleration(time, positions, velocities, accelerations)
     fig_va.show()

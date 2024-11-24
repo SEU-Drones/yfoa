@@ -3,7 +3,7 @@
  * @Author:       yong
  * @Date: 2022-10-19
  * @LastEditors: Please set LastEditors
- * @LastEditTime: 2024-11-22 08:26:58
+ * @LastEditTime: 2024-11-24 17:33:58
  * @Description:
  * @Subscriber:
  * @Publisher:
@@ -54,6 +54,7 @@ void MissionXYZ::init(ros::NodeHandle node)
     has_odom_ = false;
     sendflag_ = true;
     k_ = 0;
+    traj_id_ = 0;
 
     time_forward_ = 1.0;
     receive_traj_ = false;
@@ -85,6 +86,7 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
     case MISSION_STATE::READY:
     {
         setHome(odom_, home_);
+        handleWaypoints(wps_, home_);
         ROS_WARN("[mission] Arimming!");
         std::cout << "[mission]  the home position(x,y,z,yaw): " << home_.pos.transpose() << ", " << home_.yaw * 53.7 << std::endl;
 
@@ -102,7 +104,10 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
 
         if (state_.mode == "OFFBOARD")
         {
-            handleWaypoints(wps_, home_);
+            // 当前高度作为目标点高度
+            for (int i = 0; i < wps_.size(); i++)
+                wps_[i].pos[2] = odom_.pose.pose.position.z;
+
             changeMissionState(mission_fsm_state_, MISSION_STATE::MOVE);
         }
 
@@ -179,13 +184,13 @@ void MissionXYZ::setHome(nav_msgs::Odometry odom, Point &home)
     home.yaw = quaternion_to_yaw(odom_.pose.pose.orientation);
 }
 
-void MissionXYZ::handleWaypoints(std::vector<Point> wayPoints, Point home)
+void MissionXYZ::handleWaypoints(std::vector<Point> &wayPoints, Point home)
 {
     for (int i = 0; i < wayPoints.size(); i++)
     {
-        wps_[i].pos += home.pos;
+        wayPoints[i].pos += home.pos;
 
-        wps_[i].pos[2] = odom_.pose.pose.position.z;
+        // wps_[i].pos[2] = odom_.pose.pose.position.z;
     }
 }
 
@@ -287,6 +292,7 @@ void MissionXYZ::bsplineCallback(yf_manager::BsplineConstPtr msg)
     // UniformBspline yaw_traj(yaw_pts, msg->order, msg->yaw_dt);
 
     start_time_ = msg->start_time;
+    // start_time_ = ros::Time::now();
     traj_id_ = msg->traj_id;
 
     traj_.clear();
@@ -295,6 +301,12 @@ void MissionXYZ::bsplineCallback(yf_manager::BsplineConstPtr msg)
     traj_.push_back(traj_[1].getDerivative());
 
     traj_duration_ = traj_[0].getTimeSum();
+
+    pos_sp_ = traj_[0].evaluateDeBoorT(0.0);
+    vel_sp_ = traj_[1].evaluateDeBoorT(0.0);
+    acc_sp_ = traj_[2].evaluateDeBoorT(0.0);
+
+    std::cout << ros::Time::now().toSec() << " mission: " << pos_sp_.transpose() << " " << vel_sp_.transpose() << " " << acc_sp_.transpose() << std::endl;
 
     receive_traj_ = true;
 }
@@ -311,7 +323,7 @@ void MissionXYZ::rvizCallback(const geometry_msgs::PoseStampedConstPtr &msg)
 
     way_points.pos_x.push_back(msg->pose.position.x);
     way_points.pos_y.push_back(msg->pose.position.y);
-    way_points.pos_z.push_back(wps_[0].pos[2] + home_.pos[2]);
+    way_points.pos_z.push_back(odom_.pose.pose.position.z);
     way_points.max_vel.push_back(wps_[0].vel[0]);
     way_points.max_acc.push_back(wps_[0].acc[0]);
 
@@ -500,7 +512,7 @@ void MissionXYZ::cmdCallback(const ros::TimerEvent &e)
 
         sendCmd(pos_sp_, vel_sp_, acc_sp_, yaw_sp_, control_mode_);
 
-        // std::cout <<ros::Time::now().toSec()<<" "<< t_cur << " " << pos_sp_.transpose() << std::endl;
+        // std::cout << traj_id_ << "    " << ros::Time::now().toSec() << " " << t_cur << " " << pos_sp_.transpose() << "  " << vel_sp_.transpose() << "  " << acc_sp_.transpose() << std::endl;
 
         // std::vector<Eigen::Vector3d> pos_cmds;
         pos_cmds_.push_back(pos_sp_);

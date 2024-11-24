@@ -133,9 +133,9 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
   end_index = PosToIndex(end_pt);
   cur_node->f_score = lambda_heu_ * estimateHeuristic(cur_node->state, end_state, time_to_goal, max_vel_);
   cur_node->node_state = NodeState::IN_OPEN_SET;
-
   use_node_num_ += 1;
   open_set_.push(cur_node);
+
   if (dynamic)
   {
     time_origin_ = time_start;
@@ -169,6 +169,7 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
     {
       terminate_node = cur_node;
       retrievePath(terminate_node, path_nodes_);
+
       if (near_end)
       {
         // Check whether shot traj exist
@@ -203,8 +204,6 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
       {
         std::cout << "[hybird astar]: reach end" << std::endl;
         std::cout << "[hybird astar]: use node num: " << use_node_num_ << std::endl;
-        std::cout << "[hybird astar]: open set node num: " << open_set_.size() << std::endl;
-        std::cout << "[hybird astar]: path node num: " << path_nodes_.size() << std::endl;
         return REACH_END;
       }
       else if (cur_node->cameFrom != NULL)
@@ -230,6 +229,7 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
     std::vector<PathNodePtr> tmp_expand_nodes;
     std::vector<Eigen::Vector3d> inputs;
     std::vector<double> durations;
+    Eigen::Vector3d um;
 
     if (init_search)
     {
@@ -244,21 +244,19 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
     }
     else
     {
-      // for (double ax = -max_acc_; ax <= max_acc_ + 1e-3; ax += max_acc_ * res)
-      //   for (double ay = -max_acc_; ay <= max_acc_ + 1e-3; ay += max_acc_ * res)
-      //     {
-      //       Eigen::Vector3d um;
-      //       um << ax, ay, 0;
-      //       inputs.push_back(um);
-      //     }
       for (double ax = -max_acc_; ax <= max_acc_ + 1e-3; ax += max_acc_ * res)
         for (double ay = -max_acc_; ay <= max_acc_ + 1e-3; ay += max_acc_ * res)
           for (double az = -max_acc_; az <= max_acc_ + 1e-3; az += max_acc_ * res)
           {
-            Eigen::Vector3d um;
             um << ax, ay, az;
+
+            // if (az != 0)
+            //   continue;
+            // um << ax, ay, 0.0;
+
             inputs.push_back(um);
           }
+
       for (double tau = time_res * max_tau_; tau <= max_tau_; tau += time_res * max_tau_)
       {
         durations.push_back(tau);
@@ -700,8 +698,8 @@ void HybirdAstar::saveTrjToTxt(double delta_t, std::string filename)
   // 检查文件是否成功打开
   if (!output_file)
   {
-      std::cerr << "无法打开文件" << std::endl;
-      exit(0);
+    std::cerr << "无法打开文件" << std::endl;
+    exit(0);
   }
 
   std::vector<Eigen::Vector3d> pos_list;
@@ -724,7 +722,6 @@ void HybirdAstar::saveTrjToTxt(double delta_t, std::string filename)
       pos_list.push_back(xt.head(3));
       vel_list.push_back(xt.tail(3));
       acc_list.push_back(node->input);
-      std::cout << um.transpose()<<std::endl;
     }
     node = node->cameFrom;
   }
@@ -754,7 +751,7 @@ void HybirdAstar::saveTrjToTxt(double delta_t, std::string filename)
     {
       time(0) = 0;
       for (int j = 1; j < 4; j++)
-        time(j) = j*pow(t, j-1);
+        time(j) = j * pow(t, j - 1);
 
       for (int dim = 0; dim < 3; dim++)
       {
@@ -769,7 +766,7 @@ void HybirdAstar::saveTrjToTxt(double delta_t, std::string filename)
       time(0) = 0;
       time(1) = 0;
       for (int j = 2; j < 4; j++)
-        time(j) = j*(j-1)*pow(t, j-2);
+        time(j) = j * (j - 1) * pow(t, j - 2);
 
       for (int dim = 0; dim < 3; dim++)
       {
@@ -782,13 +779,12 @@ void HybirdAstar::saveTrjToTxt(double delta_t, std::string filename)
 
   if (output_file.is_open())
   {
-    for(int i=0; i<pos_list.size(); i++)
-    output_file << i*delta_t << "," << 0 << ","
-            << pos_list[i][0] << "," << pos_list[i][1] << "," << pos_list[i][2] << ","
-            << vel_list[i][0] << "," << vel_list[i][1] << "," << vel_list[i][2] << ","
-            << acc_list[i][0] << "," << acc_list[i][1] << "," << acc_list[i][2] << "\n";
+    for (int i = 0; i < pos_list.size(); i++)
+      output_file << i * delta_t << "," << 0 << ","
+                  << pos_list[i][0] << "," << pos_list[i][1] << "," << pos_list[i][2] << ","
+                  << vel_list[i][0] << "," << vel_list[i][1] << "," << vel_list[i][2] << ","
+                  << acc_list[i][0] << "," << acc_list[i][1] << "," << acc_list[i][2] << "\n";
   }
-
 }
 
 std::vector<PathNodePtr> HybirdAstar::getPathNodes()
@@ -919,41 +915,4 @@ std::vector<Eigen::Vector3d> HybirdAstar::getAllMotions(double delta_t)
 //   // bb.row(1) = node->state.tail(3);
 //   // std::cout<<node->state.head(3)<<" "<<node->state.tail(3)<<std::endl;
 //   trajectory_.QuinticSplineInterpolation(dim, wps, time_pts, bb);
-// }
-
-// void HybirdAstar::saveTrajToTxt(std::string filename)
-// {
-//   // std::string filename = "/home/ly/ws_search/traj.txt";
-//   std::ofstream output_file(filename);
-//   // 检查文件是否成功打开
-//   if (!output_file)
-//   {
-//       std::cerr << "无法打开文件" << std::endl;
-//       exit(0);
-//   }
-
-//   if (output_file.is_open())
-//   {
-//       double delta = 0.1;
-//       double t = 0;
-//       while (t <= trajectory_.getTimePts()[trajectory_.getTimePts().size() - 1])
-//       {
-//           double yaw;
-//           Eigen::VectorXd pos, vel, acc;
-//           trajectory_.sampleYaw(t, yaw, 0.1);
-//           trajectory_.samplePos(t, pos);
-//           trajectory_.sampleVel(t, vel);
-//           trajectory_.sampleAcc(t, acc);
-
-//           output_file << t << "," << yaw << ","
-//                       << pos[0] << "," << pos[1] << "," << pos[2] << ","
-//                       << vel[0] << "," << vel[1] << "," << vel[2] << ","
-//                       << acc[0] << "," << acc[1] << "," << acc[2] << "\n";
-//           t = t + delta;
-//           // std::cout << pos.transpose() << std::endl;
-//       }
-//       // output_file << std::endl;
-//       output_file.close();
-//       std::cout << "轨迹参数数据已保存到txt" << std::endl;
-//   }
 // }

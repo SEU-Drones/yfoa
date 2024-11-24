@@ -1,9 +1,3 @@
-/*
- * @description:
- * @param:
- * @input:
- * @output:
- */
 #include "PlanFSM.h"
 
 PlanFSM::PlanFSM(/* args */)
@@ -40,10 +34,11 @@ void PlanFSM::init(std::string filename, ros::NodeHandle &nh)
     pts_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/planner/pts", 10);
     smotions_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/planner/search_motions", 10);
 
-    nh.param("mission/control_point_distance", ctrl_pt_dist_, 0.4);
-    nh.param("mission/planning_horizon", planning_hor_, 5.0);
-    nh.param("mission/no_replan_thresh", no_replan_thresh_, 1.0);
-    nh.param("mission/replan_thresh", replan_thresh_, 1.0);
+    nh.param("fsm/control_point_distance", ctrl_pt_dist_, 0.4);
+    nh.param("fsm/planning_horizon", planning_horizon_, 5.0);
+    nh.param("fsm/no_replan_thresh", no_replan_thresh_, 1.0);
+    nh.param("fsm/replan_thresh", replan_thresh_, 1.0);
+    nh.param("fsm/collsion_check_dist", collsion_check_dist_, 1.0);
 
     // 初始化环境
     map_ptr_.reset(new InESDFMap);
@@ -62,6 +57,8 @@ void PlanFSM::init(std::string filename, ros::NodeHandle &nh)
     plan_fsm_state_ = FsmState::INIT;
     have_odom_ = false;
     have_target_ = false;
+
+    trajectory_.traj_id_ = 0;
 }
 
 // mapping
@@ -229,6 +226,12 @@ void PlanFSM::updateMapCallback(const ros::TimerEvent &)
     publishNewOcc();
     publishNewFree();
 
+    if (collisionCheck(0.1, collsion_check_dist_))
+    {
+        std::cout << "Danger! trajectory touchs obstacles" << std::endl;
+        changeFSMExecState(FsmState::REPLAN_TRAJ, "FSM");
+    }
+
     static tf::TransformBroadcaster br;
     Eigen::Quaterniond eq(camData_.R_C_2_W);
     br.sendTransform(tf::StampedTransform(tf::Transform(
@@ -237,63 +240,72 @@ void PlanFSM::updateMapCallback(const ros::TimerEvent &)
                                           ros::Time::now(), "map", "base_link"));
 }
 
-// // planning
-// void PlanFSM::updateTrajInfo(const UniformBspline &position_traj, const ros::Time time_now)
-// {
-//     trajectory_.start_time_ = time_now;
-//     trajectory_.position_traj_ = position_traj;
-//     trajectory_.velocity_traj_ = trajectory_.position_traj_.getDerivative();
-//     trajectory_.acceleration_traj_ = trajectory_.velocity_traj_.getDerivative();
-//     trajectory_.start_pos_ = trajectory_.position_traj_.evaluateDeBoorT(0.0);
-//     trajectory_.duration_ = trajectory_.position_traj_.getTimeSum();
-//     trajectory_.traj_id_ += 1;
-// }
+bool PlanFSM::collisionCheck(double delta, double min_distance)
+{
+    // std::cout << int(0.5 * trajectory_.duration_ / delta) << "    ";
+    for (int i = 0; i < int(0.5 * trajectory_.duration_ / delta); i++)
+    {
+        double dist = map_ptr_->getDist(Eigen::Vector3d{trajectory_.position_traj_.evaluateDeBoorT(i * delta)[0],
+                                                        trajectory_.position_traj_.evaluateDeBoorT(i * delta)[1],
+                                                        trajectory_.position_traj_.evaluateDeBoorT(i * delta)[2]});
+        // std::cout << dist << "    ";
+        if (dist < min_distance)
+            return true;
+    }
+    return false;
+}
 
 bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
 {
     double time_interval;
+    std::vector<Eigen::Vector3d> search_path, opt_path;
+    Eigen::MatrixXd ctrl_pts;
+
     pathnlopt_ptr_->setPhysicLimits(trajectory_.max_vel, trajectory_.max_acc);
-    hybirdastar_ptr_->setPhysicLimits(trajectory_.max_vel/2.0, trajectory_.max_acc/2.0);
+    hybirdastar_ptr_->setPhysicLimits(trajectory_.max_vel, trajectory_.max_acc);
+
     time_interval = ctrl_pt_dist_ / trajectory_.max_vel;
     // time_interval = 0.1;
-
     pathnlopt_ptr_->setTimeInterval(time_interval);
 
-    std::vector<Eigen::Vector3d> search_path, opt_path;
-    Eigen::MatrixXd opt_var;
+    std::chrono::system_clock::time_point t1, t2;
 
-    hybirdastar_ptr_->search(start.pos, start.vel, start.acc, end.pos, end.vel, init, planning_hor_);
-
-    search_path = hybirdastar_ptr_->getKinoTraj(time_interval);
-
-    // std::cout<<ros::Time::now().toSec()<<" hy input start: "<<start.pos.transpose()<<std::endl;
-    // std::cout<<ros::Time::now().toSec()<<" hy output start: "<<search_path[0].transpose()<<std::endl;
-
-    if (search_path.size() < 1)
+    t1 = std::chrono::system_clock::now();
+    int search_flag = hybirdastar_ptr_->search(start.pos, start.vel, start.acc, end.pos, end.vel, init, 100);
+    if (search_flag == HybirdAstar::NO_PATH)
         return false;
+    search_path = hybirdastar_ptr_->getKinoTraj(time_interval);
+    t2 = std::chrono::system_clock::now();
+    std::cout << "FSM  search: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
 
     publishPath(search_path, hybird_pub_);
-    publishPoints(search_path, hybird_pts_pub_);
-    publishPoints(hybirdastar_ptr_->getAllMotions(0.1), smotions_pub_);
+    // publishPoints(search_path, hybird_pts_pub_);
+    // publishPoints(hybirdastar_ptr_->getAllMotions(0.1), smotions_pub_);
 
-    std::string filename = "/home/ly/ws_yfoa/traj.txt";
-    hybirdastar_ptr_->saveTrjToTxt(0.1, filename);
+    // std::string filename = "/home/ly/ws_yfoa/traj.txt";
+    // hybirdastar_ptr_->saveTrjToTxt(0.1, filename);
 
-    opt_var.resize(3, search_path.size());
-    for (int i = 0; i < search_path.size(); i++)
-        opt_var.col(i) = search_path[i];
+    t1 = std::chrono::system_clock::now();
 
-    pathnlopt_ptr_->setOptVar(opt_var);
+    // 根据轨迹点，求出控制点
+    std::vector<Eigen::Vector3d> start_end_derivatives;
+    start_end_derivatives.push_back(start.vel);
+    start_end_derivatives.push_back(end.vel);
+    start_end_derivatives.push_back(start.acc);
+    start_end_derivatives.push_back(end.acc);
+    UniformBspline::parameterizeToBspline(time_interval, search_path, start_end_derivatives, ctrl_pts);
+    if (ctrl_pts.cols() < 3)
+        return false;
+
+    pathnlopt_ptr_->setOptVar(ctrl_pts);
     pathnlopt_ptr_->optimize();
-
     opt_path = pathnlopt_ptr_->getOptimizeTraj();
-
-    // std::cout<<ros::Time::now().toSec()<<" opt output start: "<<opt_path[0].transpose()<<std::endl;
+    t2 = std::chrono::system_clock::now();
+    std::cout << "FSM  optimize: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
 
     publishPath(opt_path, optpath_pub_);
-    publishPoints(search_path, optpath_pts_pub_);
+    // publishPoints(search_path, optpath_pts_pub_);
 
-    // updateTrajInfo(UniformBspline(pathnlopt_ptr_->getMatrixOptimizeTraj(), 3, time_interval), ros::Time::now());
     // trajectory_.start_time_ = ros::Time::now();
     trajectory_.position_traj_ = UniformBspline(pathnlopt_ptr_->getMatrixOptimizeTraj(), 3, time_interval);
     trajectory_.velocity_traj_ = trajectory_.position_traj_.getDerivative();
@@ -303,7 +315,27 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
 
     trajectory_.traj_id_ += 1;
 
-    // MAVTraj *info = &trajectory_;
+    // {
+    //     double delta = 0.1;
+    //     std::ofstream output_file("/home/ly/ws_yfoa/opttraj.txt");
+    //     // 检查文件是否成功打开
+    //     if (!output_file)
+    //     {
+    //         std::cerr << "无法打开文件" << std::endl;
+    //         exit(0);
+    //     }
+
+    //     if (output_file.is_open())
+    //     {
+    //         for (int i = 0; i < int(trajectory_.duration_ / delta); i++)
+    //         {
+    //             output_file << i * delta << "," << 0 << ","
+    //                         << trajectory_.position_traj_.evaluateDeBoorT(i * delta)[0] << "," << trajectory_.position_traj_.evaluateDeBoorT(i * delta)[1] << "," << trajectory_.position_traj_.evaluateDeBoorT(i * delta)[2] << ","
+    //                         << trajectory_.velocity_traj_.evaluateDeBoorT(i * delta)[0] << "," << trajectory_.velocity_traj_.evaluateDeBoorT(i * delta)[1] << "," << trajectory_.velocity_traj_.evaluateDeBoorT(i * delta)[2] << ","
+    //                         << trajectory_.acceleration_traj_.evaluateDeBoorT(i * delta)[0] << "," << trajectory_.acceleration_traj_.evaluateDeBoorT(i * delta)[1] << "," << trajectory_.acceleration_traj_.evaluateDeBoorT(i * delta)[2] << "\n";
+    //         }
+    //     }
+    // }
 
     yf_manager::Bspline bspline;
     bspline.order = 3;
@@ -380,7 +412,7 @@ void PlanFSM::changeFSMExecState(FsmState new_state, string pos_call)
 
 void PlanFSM::getLocalTarget(MAVState &target, MAVState cur, MAVState end, double length)
 {
-    length = 1.5 * length;
+    // length = 1.5 * length;
     // std::cout << "getLocaltarget" << length << std::endl;
     double distance = (end.pos - cur.pos).norm();
     if (distance < length)
@@ -428,9 +460,9 @@ void PlanFSM::execFSMCallback(const ros::TimerEvent &e)
         trajectory_.start_mavstate = current_mavstate_;
         trajectory_.start_time_ = ros::Time::now();
 
-        getLocalTarget(trajectory_.end_mavstate, trajectory_.start_mavstate, target_mavstate_, planning_hor_);
+        getLocalTarget(trajectory_.end_mavstate, trajectory_.start_mavstate, target_mavstate_, planning_horizon_);
 
-        bool success = callReplan(trajectory_.start_mavstate, trajectory_.end_mavstate, false);
+        bool success = callReplan(trajectory_.start_mavstate, trajectory_.end_mavstate, true);
 
         if (success)
             changeFSMExecState(FsmState::EXEC_TRAJ, "FSM");
@@ -482,20 +514,14 @@ void PlanFSM::execFSMCallback(const ros::TimerEvent &e)
         trajectory_.start_mavstate.pos = trajectory_.position_traj_.evaluateDeBoorT(t_cur);
         trajectory_.start_mavstate.vel = trajectory_.velocity_traj_.evaluateDeBoorT(t_cur);
         trajectory_.start_mavstate.acc = trajectory_.acceleration_traj_.evaluateDeBoorT(t_cur);
-        trajectory_.start_time_ = ros::Time::now();
+        trajectory_.start_time_ = time_now;
 
-        // std::cout <<ros::Time::now().toSec()<<" start "<< t_cur << " " << trajectory_.start_mavstate.pos.transpose() << std::endl;
+        getLocalTarget(trajectory_.end_mavstate, trajectory_.start_mavstate, target_mavstate_, planning_horizon_);
 
-        getLocalTarget(trajectory_.end_mavstate, trajectory_.start_mavstate, target_mavstate_, planning_hor_);
-        // std::cout << trajectory_.start_mavstate.pos.transpose() << "  " << target_mavstate_.pos.transpose() << std::endl;
-
-        bool success = callReplan(trajectory_.start_mavstate, trajectory_.end_mavstate, true);
-
-        // std::cout <<ros::Time::now().toSec()<< " 0.0 " << trajectory_.position_traj_.evaluateDeBoorT(0.0).transpose() << std::endl;
-        // std::cout <<ros::Time::now().toSec()<<" "<< (ros::Time::now() - trajectory_.start_time_).toSec() << " " << trajectory_.position_traj_.evaluateDeBoorT((ros::Time::now() - trajectory_.start_time_).toSec()).transpose() << std::endl;
+        bool success = callReplan(trajectory_.start_mavstate, trajectory_.end_mavstate, false);
 
         std::vector<Eigen::Vector3d> points;
-        points.push_back(trajectory_.start_mavstate.pos);
+        points.push_back(trajectory_.end_mavstate.pos);
         publishPoints(points, pts_pub_);
 
         if (success)

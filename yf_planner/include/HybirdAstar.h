@@ -147,7 +147,7 @@ public:
   /**
    * @brief 混合A*搜索
    *
-   * @param init TRUE表示使用设定的初始加速度，FALSE表示使用离散的最大加速度采样。当初始加速度为0时，init需要为false，否则跑不出第一个栅格
+   * @param init FALSE表示使用当前的加速度，TRUE表示使用离散的最大加速度采样。当初始加速度为0时，init需要为true，否则跑不出第一个栅格
    * @param horizon 表示搜索轨迹的最大长度
    * @param dynamic  表示搜索的轨迹是否有时间戳
    * @param time_start 表示搜索的轨迹时间戳的起始时间
@@ -199,6 +199,7 @@ private:
   double resolution_, inv_resolution_, time_resolution_, inv_time_resolution_;
 
   /* search */
+  // 要求0.5 * max_acc_ * init_max_tau_^2 > resolution_
   double max_tau_, init_max_tau_; // 状态传播的最大时间间隔
   double max_vel_, max_acc_;
   double min_dist_;

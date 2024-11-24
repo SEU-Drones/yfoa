@@ -94,7 +94,7 @@ private:
     HybirdAstar::Ptr hybirdastar_ptr_;
 
     double ctrl_pt_dist_;
-    double planning_hor_;
+    double planning_horizon_;
 
     MAVTraj trajectory_;
 
@@ -121,9 +121,10 @@ private:
     void odometryCallback(const nav_msgs::OdometryConstPtr &msg);
     void waypointsCallback(const yf_manager::WayPointsConstPtr &msg);
 
-    double no_replan_thresh_, replan_thresh_;
+    bool collisionCheck(double delta, double min_distance);
+
+    double no_replan_thresh_, replan_thresh_, collsion_check_dist_;
     FsmState plan_fsm_state_;
-    void updateTrajInfo(const UniformBspline &position_traj, const ros::Time time_now);
     bool callReplan(MAVState start, MAVState end, bool init);
     void changeFSMExecState(FsmState new_state, string pos_call);
     void getLocalTarget(MAVState &target, MAVState cur, MAVState end, double length);

@@ -23,7 +23,6 @@ void PathNlopt::init(std::string filename, InESDFMap::Ptr map_ptr, bool verbose)
     // time_interval_ = 0.1;
 
     // algorithm_ = (int)(yaml_node["algorithm"]);
-    // algorithm_ = 11; // lbfgs
     algorithm_ = nlopt_algorithm::NLOPT_LD_LBFGS; // 11
     // algorithm_ = nlopt_algorithm::NLOPT_LD_TNEWTON_PRECOND;
     // algorithm_ = nlopt_algorithm::NLOPT_LD_MMA;
@@ -110,10 +109,10 @@ void PathNlopt::optimize()
     {
         std::chrono::system_clock::time_point t1, t2;
 
-        t1 = std::chrono::system_clock::now();
+        // t1 = std::chrono::system_clock::now();
         nlopt::result result = opt.optimize(q, optimal_value_);
-        t2 = std::chrono::system_clock::now();
-        std::cout << "  optimize: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
+        // t2 = std::chrono::system_clock::now();
+        // std::cout << "  optimize: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
 
         if (verbose_)
         {
@@ -196,7 +195,7 @@ void PathNlopt::combineCost(const std::vector<double> &x, std::vector<double> &g
 
     grad_3D.col(0) = Eigen::Vector3d{0, 0, 0};
     grad_3D.col(1) = Eigen::Vector3d{0, 0, 0};
-    // grad_3D.col(2) = Eigen::Vector3d{0, 0, 0};
+    grad_3D.col(2) = Eigen::Vector3d{0, 0, 0};
 
     grad_3D.col(traj_pts_num_ - 1) = Eigen::Vector3d{0, 0, 0};
     grad_3D.col(traj_pts_num_ - 2) = Eigen::Vector3d{0, 0, 0};

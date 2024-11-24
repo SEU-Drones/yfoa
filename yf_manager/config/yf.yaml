@@ -1,7 +1,7 @@
 %YAML:1.2
 ---
 PlanMap:
-  resolution: 0.1
+  resolution: 0.2
   sogm_size_x: 20
   sogm_size_y: 20
   sogm_size_z: 10
@@ -52,24 +52,24 @@ HybirdAstar:
   resolution: 0.1
   time_resolution: 0.8
   max_tau: 0.6
-  init_max_tau: 0.8
+  init_max_tau: 0.8 # 最大持续时间
   max_vel: 3.0
   max_acc: 2.0
-  min_dist: 1.0
-  # w_time: 0.2 # 越小越不重视时间成本
-  w_time: 10 # 越小越不重视时间成本
+  min_dist: 1.5
+  w_time: 0.2 # 越小越不重视时间成本
+  # w_time: 10 # 越小越不重视时间成本
   lambda_heu: 5.0
   allocate_num: 1000000
   check_num: 5
-  vel_margin: 0.0
+  vel_margin: 0.2
 
 PathNlopt:
   max_vel: 3.0
   max_acc: 2.0
-  min_dist: 1.0
-  lambda_smoothness: 10.0
-  # lambda_feasibility: 0.01
-  lambda_feasibility: 0.00001
+  min_dist: 2.0
+  lambda_smoothness: 1000.0
+  lambda_feasibility: 0.01
+  # lambda_feasibility: 0.0
   lambda_distance: 5.0
   max_iteration_num: 300
   max_iteration_time: 0.05

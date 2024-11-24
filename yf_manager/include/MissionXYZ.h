@@ -101,7 +101,7 @@ private:
     double time_forward_;
 
     void setHome(nav_msgs::Odometry odom, Point &home);
-    void handleWaypoints(std::vector<Point> wayPoints, Point home);
+    void handleWaypoints(std::vector<Point> &wayPoints, Point home);
     void sendWayPoints(std::vector<Point> wayPoints);
     void sendWayPoints(std::vector<Point> wayPoints, int k);
     void changeMissionState(int &mode, int next);
