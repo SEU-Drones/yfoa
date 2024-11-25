@@ -3,7 +3,7 @@
  * @Author:       yong
  * @Date: 2022-10-19
  * @LastEditors: Please set LastEditors
- * @LastEditTime: 2024-11-24 17:33:58
+ * @LastEditTime: 2024-11-25 11:24:04
  * @Description:
  * @Subscriber:
  * @Publisher:
@@ -306,7 +306,7 @@ void MissionXYZ::bsplineCallback(yf_manager::BsplineConstPtr msg)
     vel_sp_ = traj_[1].evaluateDeBoorT(0.0);
     acc_sp_ = traj_[2].evaluateDeBoorT(0.0);
 
-    std::cout << ros::Time::now().toSec() << " mission: " << pos_sp_.transpose() << " " << vel_sp_.transpose() << " " << acc_sp_.transpose() << std::endl;
+    // std::cout << ros::Time::now().toSec() << " mission: " << pos_sp_.transpose() << " " << vel_sp_.transpose() << " " << acc_sp_.transpose() << std::endl;
 
     receive_traj_ = true;
 }

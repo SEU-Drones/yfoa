@@ -250,9 +250,9 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
           {
             um << ax, ay, az;
 
+            // um << ax, ay, 0.0;
             // if (az != 0)
             //   continue;
-            // um << ax, ay, 0.0;
 
             inputs.push_back(um);
           }

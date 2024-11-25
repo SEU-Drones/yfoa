@@ -20,7 +20,7 @@ void PlanFSM::init(std::string filename, ros::NodeHandle &nh)
     waypoints_sub_ = nh.subscribe("/mission/waypoints", 1, &PlanFSM::waypointsCallback, this);
     bspline_pub_ = nh.advertise<yf_manager::Bspline>("/planner/bspline", 10);
 
-    map_timer_ = nh.createTimer(ros::Duration(0.1), &PlanFSM::updateMapCallback, this);
+    map_timer_ = nh.createTimer(ros::Duration(0.066), &PlanFSM::updateMapCallback, this);
     fsm_timer_ = nh.createTimer(ros::Duration(0.1), &PlanFSM::execFSMCallback, this);
 
     new_occ_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/map/new_occ", 10);
@@ -243,7 +243,7 @@ void PlanFSM::updateMapCallback(const ros::TimerEvent &)
 bool PlanFSM::collisionCheck(double delta, double min_distance)
 {
     // std::cout << int(0.5 * trajectory_.duration_ / delta) << "    ";
-    for (int i = 0; i < int(0.5 * trajectory_.duration_ / delta); i++)
+    for (int i = 0; i < int(0.75 * trajectory_.duration_ / delta); i++)
     {
         double dist = map_ptr_->getDist(Eigen::Vector3d{trajectory_.position_traj_.evaluateDeBoorT(i * delta)[0],
                                                         trajectory_.position_traj_.evaluateDeBoorT(i * delta)[1],
@@ -271,16 +271,18 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     std::chrono::system_clock::time_point t1, t2;
 
     t1 = std::chrono::system_clock::now();
+
     int search_flag = hybirdastar_ptr_->search(start.pos, start.vel, start.acc, end.pos, end.vel, init, 100);
     if (search_flag == HybirdAstar::NO_PATH)
         return false;
+
     search_path = hybirdastar_ptr_->getKinoTraj(time_interval);
     t2 = std::chrono::system_clock::now();
     std::cout << "FSM  search: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
 
     publishPath(search_path, hybird_pub_);
     // publishPoints(search_path, hybird_pts_pub_);
-    // publishPoints(hybirdastar_ptr_->getAllMotions(0.1), smotions_pub_);
+    publishPoints(hybirdastar_ptr_->getAllMotions(0.1), smotions_pub_);
 
     // std::string filename = "/home/ly/ws_yfoa/traj.txt";
     // hybirdastar_ptr_->saveTrjToTxt(0.1, filename);
