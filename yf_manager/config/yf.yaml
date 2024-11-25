@@ -5,15 +5,15 @@ PlanMap:
   sogm_size_x: 20
   sogm_size_y: 20
   sogm_size_z: 10
-  p_hit: 0.70
+  p_hit: 0.80
   p_miss: 0.35
   p_min: 0.12
   p_max: 0.97
   p_occ: 0.80
 
   useSquareDist: 0 # 0 = false, 1=true
-  esdf_max_xy: 2.0
-  esdf_max_z: 2.0
+  esdf_max_xy: 4.0 # (m)
+  esdf_max_z: 4.0 # (m)
 
 DepthCamera:
   heigth: 640 # /realsense_plugin/camera/depth/image_raw
@@ -66,7 +66,7 @@ HybirdAstar:
 PathNlopt:
   max_vel: 3.0
   max_acc: 2.0
-  min_dist: 2.0
+  min_dist: 4.0
   lambda_smoothness: 1000.0
   lambda_feasibility: 0.01
   # lambda_feasibility: 0.0
