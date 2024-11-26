@@ -651,6 +651,12 @@ std::vector<Eigen::Vector3d> HybirdAstar::getKinoTraj(double delta_t)
 {
   std::vector<Eigen::Vector3d> state_list;
 
+  if (path_nodes_.size() < 1)
+  {
+    std::cout << "There are no path nodes!" << std::endl;
+    return state_list;
+  }
+
   /* ---------- get traj of searching ---------- */
   PathNodePtr node = path_nodes_.back();
   Eigen::Matrix<double, 6, 1> x0, xt;
@@ -669,6 +675,7 @@ std::vector<Eigen::Vector3d> HybirdAstar::getKinoTraj(double delta_t)
     node = node->cameFrom;
   }
   reverse(state_list.begin(), state_list.end());
+
   /* ---------- get traj of one shot ---------- */
   if (is_shot_succ_)
   {

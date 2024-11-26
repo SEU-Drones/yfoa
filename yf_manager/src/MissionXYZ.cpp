@@ -3,7 +3,7 @@
  * @Author:       yong
  * @Date: 2022-10-19
  * @LastEditors: Please set LastEditors
- * @LastEditTime: 2024-11-25 11:24:04
+ * @LastEditTime: 2024-11-25 17:16:27
  * @Description:
  * @Subscriber:
  * @Publisher:
@@ -43,7 +43,7 @@ void MissionXYZ::init(ros::NodeHandle node)
     state_sub_ = node.subscribe("/mavros/state", 10, &MissionXYZ::stateCallback, this);
     odom_sub_ = node.subscribe("/odom", 10, &MissionXYZ::localOdomCallback, this);
     rviz_sub_ = node.subscribe("/move_base_simple/goal", 10, &MissionXYZ::rvizCallback, this);
-    bspline_sub_ = node.subscribe("/planner/bspline", 10, &MissionXYZ::bsplineCallback, this);
+    bspline_sub_ = node.subscribe("/planner/bspline", 1, &MissionXYZ::bsplineCallback, this);
 
     wps_pub_ = node.advertise<yf_manager::WayPoints>("/mission/waypoints", 10, this);
     setpoint_raw_local_pub_ = node.advertise<mavros_msgs::PositionTarget>("/mavros/setpoint_raw/local", 10);
@@ -100,10 +100,10 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
         pos_sp_(1) = odom_.pose.pose.position.y;
         pos_sp_(2) = odom_.pose.pose.position.z;
         yaw_sp_ = quaternion_to_yaw(odom_.pose.pose.orientation);
-        // std::cout << "[mission]  the OFFBOARD position(x,y,z,yaw): " << pos_sp_.transpose() << ", " << yaw_sp_ * 53.7 << std::endl;
 
         if (state_.mode == "OFFBOARD")
         {
+            std::cout << "[mission]  the OFFBOARD position(x,y,z,yaw): " << pos_sp_.transpose() << ", " << yaw_sp_ * 53.7 << std::endl;
             // 当前高度作为目标点高度
             for (int i = 0; i < wps_.size(); i++)
                 wps_[i].pos[2] = odom_.pose.pose.position.z;
@@ -292,7 +292,6 @@ void MissionXYZ::bsplineCallback(yf_manager::BsplineConstPtr msg)
     // UniformBspline yaw_traj(yaw_pts, msg->order, msg->yaw_dt);
 
     start_time_ = msg->start_time;
-    // start_time_ = ros::Time::now();
     traj_id_ = msg->traj_id;
 
     traj_.clear();
@@ -301,12 +300,6 @@ void MissionXYZ::bsplineCallback(yf_manager::BsplineConstPtr msg)
     traj_.push_back(traj_[1].getDerivative());
 
     traj_duration_ = traj_[0].getTimeSum();
-
-    pos_sp_ = traj_[0].evaluateDeBoorT(0.0);
-    vel_sp_ = traj_[1].evaluateDeBoorT(0.0);
-    acc_sp_ = traj_[2].evaluateDeBoorT(0.0);
-
-    // std::cout << ros::Time::now().toSec() << " mission: " << pos_sp_.transpose() << " " << vel_sp_.transpose() << " " << acc_sp_.transpose() << std::endl;
 
     receive_traj_ = true;
 }
@@ -471,8 +464,6 @@ void MissionXYZ::cmdCallback(const ros::TimerEvent &e)
         ros::Time time_now = ros::Time::now();
         double t_cur = (time_now - start_time_).toSec();
 
-        // std::cout<<t_cur<<" "<<time_now<<" "<<start_time_<<std::endl;
-
         // Eigen::Vector3d pos_f;
         std::pair<double, double> yaw_yawdot(0, 0);
 
@@ -513,16 +504,16 @@ void MissionXYZ::cmdCallback(const ros::TimerEvent &e)
         sendCmd(pos_sp_, vel_sp_, acc_sp_, yaw_sp_, control_mode_);
 
         // std::cout << traj_id_ << "    " << ros::Time::now().toSec() << " " << t_cur << " " << pos_sp_.transpose() << "  " << vel_sp_.transpose() << "  " << acc_sp_.transpose() << std::endl;
+        // std::cout << "[mission] " << yaw_sp_ << ", " << yaw_sp_ * 53.7 << std::endl;
 
-        // std::vector<Eigen::Vector3d> pos_cmds;
         pos_cmds_.push_back(pos_sp_);
         publishPoints(pos_cmds_, poscmds_vis_pub_);
+        if (pos_cmds_.size() > 10000)
+            pos_cmds_.clear();
     }
 
     pos_actual_.push_back(Eigen::Vector3d{odom_.pose.pose.position.x, odom_.pose.pose.position.y, odom_.pose.pose.position.z});
     publishPoints(pos_actual_, posactual_vis_pub_);
-
-    // std::cout << "[mission] " << yaw_sp_ << ", " << yaw_sp_ * 53.7 << std::endl;
 }
 
 double MissionXYZ::quaternion_to_yaw(geometry_msgs::Quaternion &q)

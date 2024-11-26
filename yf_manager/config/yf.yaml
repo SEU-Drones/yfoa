@@ -16,8 +16,8 @@ PlanMap:
   esdf_max_z: 4.0 # (m)
 
 DepthCamera:
-  heigth: 640 # /realsense_plugin/camera/depth/image_raw
-  width: 480
+  heigth: 480 # /realsense_plugin/camera/depth/image_raw
+  width: 640
   fx: 554.3826904296875
   fy: 554.3826904296875
   cx: 320.0
@@ -53,7 +53,7 @@ HybirdAstar:
   time_resolution: 0.8
   max_tau: 0.6
   init_max_tau: 0.8 # 最大持续时间
-  max_vel: 3.0
+  max_vel: 3.0 # 会被目标点覆盖
   max_acc: 2.0
   min_dist: 1.5
   w_time: 0.2 # 越小越不重视时间成本
@@ -61,10 +61,10 @@ HybirdAstar:
   lambda_heu: 5.0
   allocate_num: 1000000
   check_num: 5
-  vel_margin: 0.2
+  vel_margin: 0.0
 
 PathNlopt:
-  max_vel: 3.0
+  max_vel: 3.0 # 会被目标点覆盖
   max_acc: 2.0
   min_dist: 2.5
   lambda_smoothness: 10.0

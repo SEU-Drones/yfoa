@@ -1,9 +1,3 @@
-<!--
- * @description: 
- * @param: 
- * @input: 
- * @output: 
--->
 # yfoa
 避障程序。
 

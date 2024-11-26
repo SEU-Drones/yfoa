@@ -18,7 +18,7 @@ void PlanFSM::init(std::string filename, ros::NodeHandle &nh)
 
     odometry_sub_ = nh.subscribe("/odom", 1, &PlanFSM::odometryCallback, this);
     waypoints_sub_ = nh.subscribe("/mission/waypoints", 1, &PlanFSM::waypointsCallback, this);
-    bspline_pub_ = nh.advertise<yf_manager::Bspline>("/planner/bspline", 10);
+    bspline_pub_ = nh.advertise<yf_manager::Bspline>("/planner/bspline", 1);
 
     map_timer_ = nh.createTimer(ros::Duration(0.066), &PlanFSM::updateMapCallback, this);
     fsm_timer_ = nh.createTimer(ros::Duration(0.1), &PlanFSM::execFSMCallback, this);
@@ -271,18 +271,16 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     std::chrono::system_clock::time_point t1, t2;
 
     t1 = std::chrono::system_clock::now();
-
-    int search_flag = hybirdastar_ptr_->search(start.pos, start.vel, start.acc, end.pos, end.vel, init, 100);
-    if (search_flag == HybirdAstar::NO_PATH)
+    int search_flag = hybirdastar_ptr_->search(start.pos, start.vel, start.acc, end.pos, end.vel, init, 2 * planning_horizon_);
+    if (search_flag != HybirdAstar::REACH_END)
         return false;
-
     search_path = hybirdastar_ptr_->getKinoTraj(time_interval);
+    search_path.insert(search_path.begin(), start.pos);
     t2 = std::chrono::system_clock::now();
-    std::cout << "FSM  search: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
 
     publishPath(search_path, hybird_pub_);
     // publishPoints(search_path, hybird_pts_pub_);
-    publishPoints(hybirdastar_ptr_->getAllMotions(0.1), smotions_pub_);
+    // publishPoints(hybirdastar_ptr_->getAllMotions(0.1), smotions_pub_);
 
     // std::string filename = "/home/ly/ws_yfoa/traj.txt";
     // hybirdastar_ptr_->saveTrjToTxt(0.1, filename);
@@ -522,15 +520,15 @@ void PlanFSM::execFSMCallback(const ros::TimerEvent &e)
 
         bool success = callReplan(trajectory_.start_mavstate, trajectory_.end_mavstate, false);
 
-        std::vector<Eigen::Vector3d> points;
-        points.push_back(trajectory_.end_mavstate.pos);
-        publishPoints(points, pts_pub_);
-
         if (success)
             changeFSMExecState(FsmState::EXEC_TRAJ, "FSM");
         else
             changeFSMExecState(FsmState::GEN_NEW_TRAJ, "FSM");
         break;
+
+        std::vector<Eigen::Vector3d> points;
+        points.push_back(trajectory_.end_mavstate.pos);
+        publishPoints(points, pts_pub_);
     }
     case FsmState::EMERGENCY_STOP:
     {
