@@ -204,6 +204,8 @@ private:
   double max_vel_, max_acc_;
   double min_dist_;
   double w_time_, lambda_heu_;
+  Eigen::Matrix3d cost_axis_weight_;
+  double no_search_dist_;
 
   int check_num_; // 碰撞检查的数量
 

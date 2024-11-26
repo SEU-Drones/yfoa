@@ -27,7 +27,13 @@ void HybirdAstar::init(std::string filename, const InESDFMap::Ptr map_ptr, bool 
   time_resolution_ = (double)(yaml_node["time_resolution"]);
   lambda_heu_ = (double)(yaml_node["lambda_heu"]);
   allocate_num_ = (double)(yaml_node["allocate_num"]);
-  check_num_ = (double)(yaml_node["check_num"]);
+  check_num_ = (int)(yaml_node["check_num"]);
+  no_search_dist_ = (double)(yaml_node["no_search_dist"]);
+
+  cost_axis_weight_ = Eigen::Matrix3d::Identity();
+  cost_axis_weight_(0, 0) = (double)(yaml_node["cost_axis_weight_x"]);
+  cost_axis_weight_(1, 1) = (double)(yaml_node["cost_axis_weight_y"]);
+  cost_axis_weight_(2, 2) = (double)(yaml_node["cost_axis_weight_z"]);
 
   tie_breaker_ = 1.0 + 1.0 / 10000;
 
@@ -65,6 +71,7 @@ void HybirdAstar::init(std::string filename, const InESDFMap::Ptr map_ptr, bool 
   std::cout << "[HybirdAstar INIT] lambda_heu: " << lambda_heu_ << std::endl;
   std::cout << "[HybirdAstar INIT] allocate_num: " << allocate_num_ << std::endl;
   std::cout << "[HybirdAstar INIT] check_num: " << check_num_ << std::endl;
+  std::cout << "[HybirdAstar INIT] no_search_dist: " << no_search_dist_ << std::endl;
 }
 
 void HybirdAstar::clearLastSearchData()
@@ -152,7 +159,7 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
   // PathNodePtr neighbor = NULL;
   PathNodePtr terminate_node = NULL;
   bool init_search = init;
-  const int tolerance = ceil(1 / resolution_);
+  const int tolerance = ceil(no_search_dist_ / resolution_);
 
   while (!open_set_.empty())
   {
@@ -332,7 +339,7 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
         }
 
         double time_to_goal, tmp_g_score, tmp_f_score;
-        tmp_g_score = (um.squaredNorm() + w_time_) * tau + cur_node->g_score;
+        tmp_g_score = ((cost_axis_weight_ * um).squaredNorm() + w_time_) * tau + cur_node->g_score;
         tmp_f_score = tmp_g_score + lambda_heu_ * estimateHeuristic(pro_state, end_state, time_to_goal, max_vel_);
 
         // Compare nodes expanded from the same cameFrom
@@ -453,6 +460,9 @@ bool HybirdAstar::computeShotTraj(Eigen::VectorXd state1, Eigen::VectorXd state2
   double t_d = time_to_goal;
   Eigen::MatrixXd coef(3, 4);
   end_vel_ = v1;
+
+  double v_max = max_vel_ * 0.2;
+  t_d = dp.norm() / v_max;
 
   Eigen::Vector3d a = 1.0 / 6.0 * (-12.0 / (t_d * t_d * t_d) * (dp - v0 * t_d) + 6 / (t_d * t_d) * dv);
   Eigen::Vector3d b = 0.5 * (6.0 / (t_d * t_d) * (dp - v0 * t_d) - 2 / t_d * dv);
@@ -584,9 +594,13 @@ double HybirdAstar::estimateHeuristic(Eigen::VectorXd x1, Eigen::VectorXd x2, do
 
   // J = \int u^2 dt + \rho T = -c1/(3*T^3) - c2/(2*T^2) - c3/T + w_time_*T;
 
-  const Vector3d dp = x2.head(3) - x1.head(3);
-  const Vector3d v0 = x1.segment(3, 3);
-  const Vector3d v1 = x2.segment(3, 3);
+  Eigen::Vector3d dp = x2.head(3) - x1.head(3);
+  Eigen::Vector3d v0 = x1.segment(3, 3);
+  Eigen::Vector3d v1 = x2.segment(3, 3);
+
+  dp = cost_axis_weight_ * dp;
+  v0 = cost_axis_weight_ * v0;
+  v1 = cost_axis_weight_ * v1;
 
   double c0 = -36 * dp.dot(dp);
   double c1 = 24 * (v0 + v1).dot(dp);
