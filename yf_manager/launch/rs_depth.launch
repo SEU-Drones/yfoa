@@ -3,7 +3,7 @@
   <!-- <arg name="json_file_path"      default=""/> -->
   <arg name="json_file_path"      default="$(find yf_manager)/config/realsense_config/HighResHighAccuracyPreset.json"/>
   <!-- <arg name="json_file_path"      default="$(find yf_manager)/config/realsense_config/LowResHighDensityPreset.json"/> -->
-  <arg name="camera"              default="D455"/>
+  <arg name="camera"              default="camera"/>
   <arg name="tf_prefix"           default="$(arg camera)"/>
 
   <arg name="depth_width"         default="640"/>
