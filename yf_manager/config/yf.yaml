@@ -65,7 +65,7 @@ HybirdAstar:
   no_search_dist: 1.0
   cost_axis_weight_x: 1.0
   cost_axis_weight_y: 1.0
-  cost_axis_weight_z: 5.0
+  cost_axis_weight_z: 1.1
 
 
 
