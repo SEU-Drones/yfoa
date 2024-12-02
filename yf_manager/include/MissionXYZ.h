@@ -100,8 +100,9 @@ private:
     double last_yaw_, last_yaw_dot_;
     double time_forward_;
 
+    std::string handle_wpts_xy_,handle_wpts_z_;
+
     void setHome(nav_msgs::Odometry odom, Point &home);
-    void handleWaypoints(std::vector<Point> &wayPoints, Point home);
     void sendWayPoints(std::vector<Point> wayPoints);
     void sendWayPoints(std::vector<Point> wayPoints, int k);
     void changeMissionState(int &mode, int next);

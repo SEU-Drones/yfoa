@@ -56,7 +56,7 @@ HybirdAstar:
   max_vel: 3.0 # 会被目标点覆盖
   max_acc: 2.0
   min_dist: 2.0
-  w_time: 0.1 # 越小越不重视时间成本
+  w_time: 10 # 越小越不重视时间成本
   # w_time: 10 # 越小越不重视时间成本
   lambda_heu: 5.0
   allocate_num: 1000000
@@ -65,7 +65,7 @@ HybirdAstar:
   no_search_dist: 1.0
   cost_axis_weight_x: 1.0
   cost_axis_weight_y: 1.0
-  cost_axis_weight_z: 1.1
+  cost_axis_weight_z: 1.0
 
 
 
@@ -73,8 +73,8 @@ PathNlopt:
   max_vel: 3.0 # 会被目标点覆盖
   max_acc: 2.0
   min_dist: 2.5
-  lambda_smoothness: 100.0
-  lambda_feasibility: 0.1
-  lambda_distance: 1.0
+  lambda_smoothness: 10.0
+  lambda_feasibility: 0.0001
+  lambda_distance: 5.0
   max_iteration_num: 500
   max_iteration_time: 0.05

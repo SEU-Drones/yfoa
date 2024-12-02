@@ -108,6 +108,36 @@ bool HybirdAstar::isOccupied(Eigen::Vector3d pos, double thr)
   }
 }
 
+Eigen::Matrix3d createCoordinateSystem(const Eigen::Vector3d& A, const Eigen::Vector3d& B) {
+    // Step 1: Calculate vector AB
+    Eigen::Vector3d AB = B - A;
+    
+    // Step 2: Normalize AB to get z'
+    Eigen::Vector3d z_prime = AB.normalized();
+    
+    // Step 3: Find an arbitrary vector orthogonal to z' as x'
+    // We can use a simple heuristic: if z' is not parallel to (0,0,1),
+    // we use the cross product of z' with (0,0,1), otherwise with (1,0,0)
+    Eigen::Vector3d x_prime;
+    if (abs(z_prime(2)) < 0.9) {
+        x_prime = Eigen::Vector3d::UnitZ().cross(z_prime).normalized();
+    } else {
+        x_prime = Eigen::Vector3d::UnitX().cross(z_prime).normalized();
+    }
+    
+    // Step 4: Calculate y' as the cross product of z' and x'
+    Eigen::Vector3d y_prime = z_prime.cross(x_prime);
+    
+    // Step 5: Construct the rotation matrix
+    Eigen::Matrix3d R;
+    R.col(0) = x_prime;
+    R.col(1) = y_prime;
+    R.col(2) = z_prime;
+    
+    return R;
+}
+ 
+
 int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen::Vector3d start_a,
                         Eigen::Vector3d end_pt, Eigen::Vector3d end_v,
                         bool init, double horizon, bool dynamic, double time_start)
@@ -451,12 +481,13 @@ void HybirdAstar::retrievePath(PathNodePtr end_node, std::vector<PathNodePtr> &p
 
 bool HybirdAstar::computeShotTraj(Eigen::VectorXd state1, Eigen::VectorXd state2, double time_to_goal, Eigen::MatrixXd &coef_shot, double &t_shot)
 {
+  // x = a^3*t^3 + b^2*t^2 + c*t + d;
   /* ---------- get coefficient ---------- */
-  const Vector3d p0 = state1.head(3);
-  const Vector3d dp = state2.head(3) - p0;
-  const Vector3d v0 = state1.segment(3, 3);
-  const Vector3d v1 = state2.segment(3, 3);
-  const Vector3d dv = v1 - v0;
+  const Eigen::Vector3d p0 = state1.head(3);
+  const Eigen::Vector3d dp = state2.head(3) - p0;
+  const Eigen::Vector3d v0 = state1.segment(3, 3);
+  const Eigen::Vector3d v1 = state2.segment(3, 3);
+  const Eigen::Vector3d dv = v1 - v0;
   double t_d = time_to_goal;
   Eigen::MatrixXd coef(3, 4);
   end_vel_ = v1;
@@ -464,8 +495,10 @@ bool HybirdAstar::computeShotTraj(Eigen::VectorXd state1, Eigen::VectorXd state2
   double v_max = max_vel_ * 0.2;
   t_d = dp.norm() / v_max;
 
-  Eigen::Vector3d a = 1.0 / 6.0 * (-12.0 / (t_d * t_d * t_d) * (dp - v0 * t_d) + 6 / (t_d * t_d) * dv);
-  Eigen::Vector3d b = 0.5 * (6.0 / (t_d * t_d) * (dp - v0 * t_d) - 2 / t_d * dv);
+  // Eigen::Vector3d a = 1.0 / 6.0 * (-12.0 / (t_d * t_d * t_d) * (dp - v0 * t_d) + 6 / (t_d * t_d) * dv);
+  // Eigen::Vector3d b = 0.5 * (6.0 / (t_d * t_d) * (dp - v0 * t_d) - 2 / t_d * dv);
+  Eigen::Vector3d a = (2*t_d*v0-2*dp+t_d*dv)/(t_d*t_d*t_d);
+  Eigen::Vector3d b = (3*dp-3*v0*t_d-dv*t_d)/(t_d*t_d);
   Eigen::Vector3d c = v0;
   Eigen::Vector3d d = p0;
 
@@ -473,35 +506,36 @@ bool HybirdAstar::computeShotTraj(Eigen::VectorXd state1, Eigen::VectorXd state2
   // a*t^3 + b*t^2 + v0*t + p0
   coef.col(3) = a, coef.col(2) = b, coef.col(1) = c, coef.col(0) = d;
 
-  Eigen::Vector3d coord, vel, acc;
-  Eigen::VectorXd poly1d, t, polyv, polya;
-  Eigen::Vector3i index;
+  // Eigen::Vector3d coord, vel, acc;
+  // Eigen::VectorXd poly1d, t, polyv, polya;
+  // Eigen::Vector3i index;
 
-  Eigen::MatrixXd Tm(4, 4);
-  Tm << 0, 1, 0, 0, 0, 0, 2, 0, 0, 0, 0, 3, 0, 0, 0, 0;
+  // Eigen::MatrixXd Tm(4, 4);
+  // Tm << 0, 1, 0, 0, 0, 0, 2, 0, 0, 0, 0, 3, 0, 0, 0, 0;
 
-  /* ---------- forward checking of trajectory ---------- */
-  double t_delta = t_d / 10;
-  for (double time = t_delta; time <= t_d; time += t_delta)
-  {
-    t = VectorXd::Zero(4);
-    for (int j = 0; j < 4; j++)
-      t(j) = pow(time, j);
+  // /* ---------- forward checking of trajectory ---------- */
+  // double t_delta = t_d / 10;
+  // for (double time = t_delta; time <= t_d; time += t_delta)
+  // {
+  //   t = VectorXd::Zero(4);
+  //   for (int j = 0; j < 4; j++)
+  //     t(j) = pow(time, j);
 
-    for (int dim = 0; dim < 3; dim++)
-    {
-      poly1d = coef.row(dim);
-      coord(dim) = poly1d.dot(t);
-      vel(dim) = (Tm * poly1d).dot(t);
-      acc(dim) = (Tm * Tm * poly1d).dot(t);
+  //   for (int dim = 0; dim < 3; dim++)
+  //   {
+  //     poly1d = coef.row(dim);
+  //     coord(dim) = poly1d.dot(t);
+  //     vel(dim) = (Tm * poly1d).dot(t);
+  //     acc(dim) = (Tm * Tm * poly1d).dot(t);
 
-      if (fabs(vel(dim)) > max_vel_ || fabs(acc(dim)) > max_acc_)
-      {
-        // cout << "vel:" << vel(dim) << ", acc:" << acc(dim) << endl;
-        // return false;
-      }
-    }
-  }
+  //     if (fabs(vel(dim)) > max_vel_ || fabs(acc(dim)) > max_acc_)
+  //     {
+  //       // cout << "vel:" << vel(dim) << ", acc:" << acc(dim) << endl;
+  //       // return false;
+  //     }
+  //   }
+  // }
+  
   coef_shot = coef;
   t_shot = t_d;
   return true;
@@ -588,9 +622,15 @@ std::vector<double> HybirdAstar::quarticRoots(double a, double b, double c, doub
 
 double HybirdAstar::estimateHeuristic(Eigen::VectorXd x1, Eigen::VectorXd x2, double &optimal_time, double max_vel)
 {
-  // // min dist
+  // // 欧几里得距离
   // optimal_time = 1;
   // return (x2.head(3) - x1.head(3)).norm();
+
+  // 曼哈顿距离
+  // optimal_time = 1;
+  // Eigen::Vector3i start = PosToIndex(Eigen::Vector3d{x1(0),x1(1),x1(2)});
+  // Eigen::Vector3i end = PosToIndex(Eigen::Vector3d{x2(0),x2(1),x2(2)});
+  // return double(std::abs(start[0]-end[0]) + std::abs(start[1]-end[1]) + std::abs(start[2]-end[2]));
 
   // J = \int u^2 dt + \rho T = -c1/(3*T^3) - c2/(2*T^2) - c3/T + w_time_*T;
 

@@ -272,11 +272,13 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
 
     t1 = std::chrono::system_clock::now();
     int search_flag = hybirdastar_ptr_->search(start.pos, start.vel, start.acc, end.pos, end.vel, init, 2 * planning_horizon_);
+    // int search_flag = hybirdastar_ptr_->search(end.pos, end.vel, Eigen::Vector3d{0,0,0}, start.pos, start.vel, init, 2 * planning_horizon_);
     if (search_flag != HybirdAstar::REACH_END)
         return false;
     search_path = hybirdastar_ptr_->getKinoTraj(time_interval);
     search_path.insert(search_path.begin(), start.pos);
     t2 = std::chrono::system_clock::now();
+    std::cout << "FSM  search: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
 
     publishPath(search_path, hybird_pub_);
     // publishPoints(search_path, hybird_pts_pub_);

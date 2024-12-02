@@ -36,6 +36,10 @@ void MissionXYZ::init(ros::NodeHandle node)
     node.param("mission/sendOneByOne", sendOneByOne_, true);
     node.param("mission/wps_threshold", wps_thr_, 2.0);
     node.param("mission/control_mode", control_mode_, 2);
+    node.param<std::string>("mission/handle_wpts_xy", handle_wpts_xy_, "UseOffboardPoint");
+    node.param<std::string>("mission/handle_wpts_z", handle_wpts_z_, "UseOffboardHeight");
+
+    
 
     mission_fsm_timer_ = node.createTimer(ros::Duration(0.10), &MissionXYZ::missionCallback, this);
     cmd_timer_ = node.createTimer(ros::Duration(0.05), &MissionXYZ::cmdCallback, this);
@@ -86,7 +90,7 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
     case MISSION_STATE::READY:
     {
         setHome(odom_, home_);
-        handleWaypoints(wps_, home_);
+        // handleWaypoints(wps_, home_);
         ROS_WARN("[mission] Arimming!");
         std::cout << "[mission]  the home position(x,y,z,yaw): " << home_.pos.transpose() << ", " << home_.yaw * 53.7 << std::endl;
 
@@ -105,8 +109,22 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
         {
             std::cout << "[mission]  the OFFBOARD position(x,y,z,yaw): " << pos_sp_.transpose() << ", " << yaw_sp_ * 53.7 << std::endl;
             // 当前高度作为目标点高度
-            for (int i = 0; i < wps_.size(); i++)
-                wps_[i].pos[2] = odom_.pose.pose.position.z;
+            for (int i = 0; i < wps_.size(); i++){
+                if(handle_wpts_xy_ == "UseArmmingPoint"){
+                    wps_[i].pos[0] += home_.pos[0];
+                    wps_[i].pos[1] += home_.pos[1];
+                }
+                else if(handle_wpts_xy_ == "UseOffboardPoint"){
+                    wps_[i].pos[0] += odom_.pose.pose.position.z;
+                    wps_[i].pos[1] += odom_.pose.pose.position.y;
+                }
+
+                if(handle_wpts_z_ == "UseSetHeight")
+                    wps_[i].pos[2] += home_.pos[2];
+                else if(handle_wpts_z_ == "UseOffboardHeight")
+                    wps_[i].pos[2] = odom_.pose.pose.position.z;
+
+            }
 
             changeMissionState(mission_fsm_state_, MISSION_STATE::MOVE);
         }
@@ -182,16 +200,6 @@ void MissionXYZ::setHome(nav_msgs::Odometry odom, Point &home)
     home.pos[2] = odom_.pose.pose.position.z;
 
     home.yaw = quaternion_to_yaw(odom_.pose.pose.orientation);
-}
-
-void MissionXYZ::handleWaypoints(std::vector<Point> &wayPoints, Point home)
-{
-    for (int i = 0; i < wayPoints.size(); i++)
-    {
-        wayPoints[i].pos += home.pos;
-
-        // wps_[i].pos[2] = odom_.pose.pose.position.z;
-    }
 }
 
 void MissionXYZ::sendWayPoints(std::vector<Point> wayPoints, int k)
