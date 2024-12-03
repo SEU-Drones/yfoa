@@ -4,6 +4,12 @@
  * @input:
  * @output:
  */
+/*
+ * @description:
+ * @param:
+ * @input:
+ * @output:
+ */
 #ifndef _UNIFORMBSPLINE_H_
 #define _UNIFORMBSPLINE_H_
 
@@ -34,13 +40,13 @@ private:
 
 public:
   UniformBspline() {}
-  UniformBspline(const Eigen::MatrixXd &points, const int &order, const double &interval);
+  UniformBspline(const Eigen::MatrixXd &cps, const int &order, const double &interval);
   ~UniformBspline();
 
   Eigen::MatrixXd get_control_points(void) { return control_points_; }
 
   // initialize as an uniform B-spline
-  void setUniformBspline(const Eigen::MatrixXd &points, const int &order, const double &interval);
+  void setUniformBspline(const Eigen::MatrixXd &cps, const int &order, const double &interval);
 
   // get / set basic bspline info
 
@@ -56,13 +62,13 @@ public:
   inline Eigen::VectorXd evaluateDeBoorT(const double &t) { return evaluateDeBoor(t + u_(p_)); } // use t \in [0, duration]
   UniformBspline getDerivative();
 
-  // 3D B-spline interpolation of points in point_set, with boundary vel&acc
+  // 3D B-spline interpolation of points in wps, with boundary vel&acc
   // constraints
   // input : (K+2) points with boundary vel/acc; ts
   // output: (K+6) control_pts
-  static void parameterizeToBspline(const double &ts, const vector<Eigen::Vector3d> &point_set,
+  static void parameterizeToBspline(const double &ts, const vector<Eigen::Vector3d> &wps,
                                     const vector<Eigen::Vector3d> &start_end_derivative,
-                                    Eigen::MatrixXd &ctrl_pts);
+                                    Eigen::MatrixXd &cps);
 
   /* check feasibility, adjust time */
 

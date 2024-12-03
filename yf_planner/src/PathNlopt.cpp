@@ -23,8 +23,8 @@ void PathNlopt::init(std::string filename, InESDFMap::Ptr map_ptr, bool verbose)
     // time_interval_ = 0.1;
 
     // algorithm_ = (int)(yaml_node["algorithm"]);
-    // algorithm_ = nlopt_algorithm::NLOPT_LD_LBFGS; // 11
-    algorithm_ = nlopt_algorithm::NLOPT_LD_TNEWTON_PRECOND;
+    algorithm_ = nlopt_algorithm::NLOPT_LD_LBFGS; // 11
+    // algorithm_ = nlopt_algorithm::NLOPT_LD_TNEWTON_PRECOND;
     // algorithm_ = nlopt_algorithm::NLOPT_LD_MMA;
 
     max_iteration_num_ = (int)(yaml_node["max_iteration_num"]);

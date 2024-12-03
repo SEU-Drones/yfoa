@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <launch>
-    <node pkg="yf_manager2" name="MissionXYZ_node" type="MissionXYZ_node" output="screen">
+    <node pkg="yf_manager2" name="MissionXYZ_node2" type="MissionXYZ_node2" output="screen">
         <remap from="/odom" to="/mavros/local_position/odom"/>
         <param name="mission/sendOneByOne" value="true" />
         <param name="mission/wps_threshold" value="2.0" />
@@ -51,7 +51,7 @@
         <param name="mission/waypoint3_az" value="0.0" />
     </node>
 
-    <node pkg="yf_manager2" name="PlanFSM_node" type="PlanFSM_node" output="screen">
+    <node pkg="yf_manager2" name="PlanFSM_node2" type="PlanFSM_node2" output="screen">
         <remap from="/odom" to="/mavros/local_position/odom"/>
         <!-- <remap from="/depth" to="/D455/depth/image_rect_raw"/> -->
         <remap from="/depth" to="/realsense_plugin/camera/depth/image_raw"/>

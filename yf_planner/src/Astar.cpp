@@ -1,6 +1,5 @@
 #include "Astar.h"
 
-
 Astar::Astar()
 {
 }
@@ -28,7 +27,7 @@ void Astar::init(std::string filename, InESDFMap::Ptr workspace)
     min_dist_ = (double)(yaml_node["min_dist"]);
     resolution_ = (double)(yaml_node["resolution"]);
 
-    Eigen::Vector3i pool_size = Eigen::Vector3i{pool_size_x,pool_size_y,pool_size_z};
+    Eigen::Vector3i pool_size = Eigen::Vector3i{pool_size_x, pool_size_y, pool_size_z};
     POOL_SIZE_ = pool_size;
     CENTER_IDX_ = pool_size / 2;
     AstarPathNodeMap_ = new AstarPathNodePtr **[POOL_SIZE_(0)];
@@ -50,6 +49,12 @@ void Astar::init(std::string filename, InESDFMap::Ptr workspace)
     inv_resolution_ = 1 / resolution_;
 
     rounds_ = 0;
+
+    std::cout << "[Astar INIT] resolution: " << resolution_ << " (m)" << std::endl;
+    std::cout << "[Astar INIT] min_dist: " << min_dist_ << " (m)" << std::endl;
+    std::cout << "[Astar INIT] pool_size_x: " << pool_size_x << " (res)" << std::endl;
+    std::cout << "[Astar INIT] pool_size_y: " << pool_size_y << " (res)" << std::endl;
+    std::cout << "[Astar INIT] pool_size_z: " << pool_size_z << " (res)" << std::endl;
 }
 
 // void Astar::setPlanMap(PlanMapBase::Ptr workspace)
@@ -99,8 +104,8 @@ double Astar::getEuclHeu(AstarPathNodePtr node1, AstarPathNodePtr node2)
 
 double Astar::getHeu(AstarPathNodePtr node1, AstarPathNodePtr node2)
 {
-    // return tie_breaker_ * getDiagHeu(node1, node2);
-    return tie_breaker_ * getManhHeu(node1, node2);
+    return tie_breaker_ * getDiagHeu(node1, node2);
+    // return tie_breaker_ * getManhHeu(node1, node2);
 }
 
 std::vector<AstarPathNodePtr> Astar::retrievePath(AstarPathNodePtr current)
@@ -238,6 +243,7 @@ bool Astar::search(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt)
             for (int dy = -1; dy <= 1; dy++)
                 for (int dz = -1; dz <= 1; dz++)
                 {
+                    // int dz = 0;
                     if (dx == 0 && dy == 0 && dz == 0)
                         continue;
 
@@ -271,6 +277,7 @@ bool Astar::search(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt)
                     }
 
                     double static_cost = sqrt(dx * dx + dy * dy + dz * dz);
+                    // double static_cost = std::abs(dx) + std::abs(dy) + std::abs(dz);
                     tentative_gScore = current->gScore + static_cost;
 
                     if (!flag_explored)
@@ -292,6 +299,9 @@ bool Astar::search(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt)
                 }
     }
 
+    std::cout << "[astar]: search failed" << std::endl;
+    std::cout << "[astar]: num_iter: " << num_iter << std::endl;
+    std::cout << "[astar]: num: " << num << std::endl;
     return false;
 }
 
@@ -308,18 +318,21 @@ std::vector<Eigen::Vector3d> Astar::getPath()
 }
 
 // 插值函数，根据指定的间隔生成新的路径点
-std::vector<Eigen::Vector3d> Astar::getPath(double interval) {
+std::vector<Eigen::Vector3d> Astar::getPath(double interval)
+{
     std::vector<Eigen::Vector3d> originalPath = getPath();
     std::vector<Eigen::Vector3d> newPath;
 
-    if (originalPath.empty()) {
+    if (originalPath.empty())
+    {
         return newPath;
     }
 
     // 添加第一个点
     newPath.push_back(originalPath[0]);
 
-    for (size_t i = 1; i < originalPath.size(); ++i) {
+    for (size_t i = 1; i < originalPath.size(); ++i)
+    {
         Eigen::Vector3d start = originalPath[i - 1];
         Eigen::Vector3d end = originalPath[i];
         double distance = (end - start).norm();
@@ -328,7 +341,8 @@ std::vector<Eigen::Vector3d> Astar::getPath(double interval) {
         int numSegments = static_cast<int>(std::ceil(distance / interval));
         double step = distance / numSegments;
 
-        for (int j = 1; j < numSegments; ++j) {
+        for (int j = 1; j < numSegments; ++j)
+        {
             Eigen::Vector3d newPoint = start + (end - start) * (j * step / distance);
             newPath.push_back(newPoint);
         }

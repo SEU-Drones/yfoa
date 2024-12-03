@@ -125,7 +125,7 @@ private:
 
     double no_replan_thresh_, replan_thresh_, collsion_check_dist_;
     FsmState plan_fsm_state_;
-    bool callReplan(MAVState start, MAVState end, bool init);
+    bool callReplan(MAVState start, MAVState end);
     void changeFSMExecState(FsmState new_state, string pos_call);
     void getLocalTarget(MAVState &target, MAVState cur, MAVState end, double length);
     void execFSMCallback(const ros::TimerEvent &e);

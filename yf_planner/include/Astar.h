@@ -62,6 +62,11 @@ public:
         resolution_ = resolution;
     }
 
+    double getResolution()
+    {
+        return resolution_;
+    }
+
     bool search(Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
 
     std::vector<Eigen::Vector3d> getPath();
@@ -98,6 +103,5 @@ private:
 
     bool isOccupied(Eigen::Vector3d pos, double thr = -1.0);
 };
-
 
 #endif
