@@ -51,7 +51,7 @@ void HybirdAstar::init(std::string filename, const InESDFMap::Ptr map_ptr, bool 
   path_node_pool_.resize(allocate_num_);
   for (int i = 0; i < allocate_num_; i++)
   {
-    path_node_pool_[i] = new PathNode;
+    path_node_pool_[i] = new HybirdAstarPathNode;
   }
 
   // phi_ = Eigen::MatrixXd::Identity(6, 6);
@@ -79,12 +79,12 @@ void HybirdAstar::clearLastSearchData()
   expanded_nodes_.clear();
   path_nodes_.clear();
 
-  std::priority_queue<PathNodePtr, std::vector<PathNodePtr>, NodeComparator> empty_queue;
+  std::priority_queue<HybirdAstarPathNodePtr, std::vector<HybirdAstarPathNodePtr>, NodeComparator> empty_queue;
   open_set_.swap(empty_queue);
 
   for (int i = 0; i < use_node_num_; i++)
   {
-    PathNodePtr node = path_node_pool_[i];
+    HybirdAstarPathNodePtr node = path_node_pool_[i];
     node->cameFrom = NULL;
     node->node_state = NodeState::NOT_EXPAND;
   }
@@ -108,36 +108,6 @@ bool HybirdAstar::isOccupied(Eigen::Vector3d pos, double thr)
   }
 }
 
-Eigen::Matrix3d createCoordinateSystem(const Eigen::Vector3d& A, const Eigen::Vector3d& B) {
-    // Step 1: Calculate vector AB
-    Eigen::Vector3d AB = B - A;
-    
-    // Step 2: Normalize AB to get z'
-    Eigen::Vector3d z_prime = AB.normalized();
-    
-    // Step 3: Find an arbitrary vector orthogonal to z' as x'
-    // We can use a simple heuristic: if z' is not parallel to (0,0,1),
-    // we use the cross product of z' with (0,0,1), otherwise with (1,0,0)
-    Eigen::Vector3d x_prime;
-    if (abs(z_prime(2)) < 0.9) {
-        x_prime = Eigen::Vector3d::UnitZ().cross(z_prime).normalized();
-    } else {
-        x_prime = Eigen::Vector3d::UnitX().cross(z_prime).normalized();
-    }
-    
-    // Step 4: Calculate y' as the cross product of z' and x'
-    Eigen::Vector3d y_prime = z_prime.cross(x_prime);
-    
-    // Step 5: Construct the rotation matrix
-    Eigen::Matrix3d R;
-    R.col(0) = x_prime;
-    R.col(1) = y_prime;
-    R.col(2) = z_prime;
-    
-    return R;
-}
- 
-
 int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen::Vector3d start_a,
                         Eigen::Vector3d end_pt, Eigen::Vector3d end_v,
                         bool init, double horizon, bool dynamic, double time_start)
@@ -154,7 +124,7 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
   start_vel_ = start_v;
   start_acc_ = start_a;
 
-  PathNodePtr cur_node = path_node_pool_[0];
+  HybirdAstarPathNodePtr cur_node = path_node_pool_[0];
   cur_node->cameFrom = NULL;
   cur_node->state.head(3) = start_pt;
   cur_node->state.tail(3) = start_v;
@@ -186,8 +156,8 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
     expanded_nodes_.insert(cur_node->index, cur_node);
   }
 
-  // PathNodePtr neighbor = NULL;
-  PathNodePtr terminate_node = NULL;
+  // HybirdAstarPathNodePtr neighbor = NULL;
+  HybirdAstarPathNodePtr terminate_node = NULL;
   bool init_search = init;
   const int tolerance = ceil(no_search_dist_ / resolution_);
 
@@ -263,7 +233,7 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
     double res = 1 / 2.0, time_res = 1 / 1.0, time_res_init = 1 / 20.0;
     Eigen::Matrix<double, 6, 1> cur_state = cur_node->state;
     Eigen::Matrix<double, 6, 1> pro_state;
-    std::vector<PathNodePtr> tmp_expand_nodes;
+    std::vector<HybirdAstarPathNodePtr> tmp_expand_nodes;
     std::vector<Eigen::Vector3d> inputs;
     std::vector<double> durations;
     Eigen::Vector3d um;
@@ -316,7 +286,7 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
         all_motions_.push_back(std::make_pair(cur_state, Eigen::Vector4d{um(0), um(1), um(2), tau}));
 
         // Check if in close set
-        PathNodePtr pro_node = dynamic ? expanded_nodes_.find(pro_id, pro_t_id) : expanded_nodes_.find(pro_id);
+        HybirdAstarPathNodePtr pro_node = dynamic ? expanded_nodes_.find(pro_id, pro_t_id) : expanded_nodes_.find(pro_id);
         if (pro_node != NULL && pro_node->node_state == NodeState::IN_CLOSE_SET)
         {
           if (init_search)
@@ -377,7 +347,7 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
         bool prune = false;
         for (int j = 0; j < tmp_expand_nodes.size(); ++j)
         {
-          PathNodePtr expand_node = tmp_expand_nodes[j];
+          HybirdAstarPathNodePtr expand_node = tmp_expand_nodes[j];
           if ((pro_id - expand_node->index).norm() == 0 && ((!dynamic) || pro_t_id == expand_node->time_idx))
           {
             prune = true;
@@ -465,9 +435,9 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
   return NO_PATH;
 }
 
-void HybirdAstar::retrievePath(PathNodePtr end_node, std::vector<PathNodePtr> &path_nodes)
+void HybirdAstar::retrievePath(HybirdAstarPathNodePtr end_node, std::vector<HybirdAstarPathNodePtr> &path_nodes)
 {
-  PathNodePtr cur_node = end_node;
+  HybirdAstarPathNodePtr cur_node = end_node;
   path_nodes.push_back(cur_node);
 
   while (cur_node->cameFrom != NULL)
@@ -712,7 +682,7 @@ std::vector<Eigen::Vector3d> HybirdAstar::getKinoTraj(double delta_t)
   }
 
   /* ---------- get traj of searching ---------- */
-  PathNodePtr node = path_nodes_.back();
+  HybirdAstarPathNodePtr node = path_nodes_.back();
   Eigen::Matrix<double, 6, 1> x0, xt;
 
   while (node->cameFrom != NULL)
@@ -768,7 +738,7 @@ void HybirdAstar::saveTrjToTxt(double delta_t, std::string filename)
   std::vector<Eigen::Vector3d> acc_list;
 
   /* ---------- get traj of searching ---------- */
-  PathNodePtr node = path_nodes_.back();
+  HybirdAstarPathNodePtr node = path_nodes_.back();
   Eigen::Matrix<double, 6, 1> x0, xt;
 
   while (node->cameFrom != NULL)
@@ -848,11 +818,11 @@ void HybirdAstar::saveTrjToTxt(double delta_t, std::string filename)
   }
 }
 
-std::vector<PathNodePtr> HybirdAstar::getPathNodes()
+std::vector<HybirdAstarPathNodePtr> HybirdAstar::getHybirdAstarPathNodes()
 {
-  std::vector<PathNodePtr> pathNode_list;
+  std::vector<HybirdAstarPathNodePtr> pathNode_list;
 
-  PathNodePtr node = path_nodes_.back();
+  HybirdAstarPathNodePtr node = path_nodes_.back();
   while (node->cameFrom != NULL)
   {
     pathNode_list.push_back(node);
@@ -863,11 +833,11 @@ std::vector<PathNodePtr> HybirdAstar::getPathNodes()
   return pathNode_list;
 }
 
-std::vector<PathNodePtr> HybirdAstar::getVisitedNodes()
+std::vector<HybirdAstarPathNodePtr> HybirdAstar::getVisitedNodes()
 {
-  std::vector<PathNodePtr> pathNode_list;
+  std::vector<HybirdAstarPathNodePtr> pathNode_list;
 
-  PathNodePtr node = path_nodes_.back();
+  HybirdAstarPathNodePtr node = path_nodes_.back();
   while (node->cameFrom != NULL)
   {
     pathNode_list.push_back(node);
@@ -875,7 +845,7 @@ std::vector<PathNodePtr> HybirdAstar::getVisitedNodes()
   }
   reverse(pathNode_list.begin(), pathNode_list.end()); // The first node is the start node.
 
-  std::priority_queue<PathNodePtr, std::vector<PathNodePtr>, NodeComparator> temp_queue;
+  std::priority_queue<HybirdAstarPathNodePtr, std::vector<HybirdAstarPathNodePtr>, NodeComparator> temp_queue;
   temp_queue = open_set_;
   int num = temp_queue.size();
   for (int i = 0; i < num; i++)
@@ -896,7 +866,7 @@ std::vector<Eigen::Vector3d> HybirdAstar::getVisitedPath(double delta_t)
   Eigen::Vector3d um;
   double duration;
 
-  PathNodePtr node;
+  HybirdAstarPathNodePtr node;
 
   node = path_nodes_.back();
   while (node->cameFrom != NULL)
@@ -912,7 +882,7 @@ std::vector<Eigen::Vector3d> HybirdAstar::getVisitedPath(double delta_t)
     node = node->cameFrom;
   }
 
-  std::priority_queue<PathNodePtr, std::vector<PathNodePtr>, NodeComparator> temp_queue;
+  std::priority_queue<HybirdAstarPathNodePtr, std::vector<HybirdAstarPathNodePtr>, NodeComparator> temp_queue;
   temp_queue = open_set_;
   int num = temp_queue.size();
   for (int i = 0; i < num; i++)
@@ -969,7 +939,7 @@ std::vector<Eigen::Vector3d> HybirdAstar::getAllMotions(double delta_t)
 //     time_pts.push_back(start_time+delta_t*i);
 //   }
 
-//   PathNodePtr node = path_nodes_.front();
+//   HybirdAstarPathNodePtr node = path_nodes_.front();
 
 //   Eigen::MatrixXd bb = Eigen::MatrixXd::Zero(4, dim);
 //   // bb.row(0) = node->state.head(3);

@@ -36,9 +36,11 @@ include_directories(
 include_directories("/usr/include/eigen3")
 
 add_library(yf_planner
+  include/Astar.h
   include/HybirdAstar.h
   include/PathNlopt.h
   include/UniformBspline.h
+  src/Astar.cpp
   src/HybirdAstar.cpp
   src/PathNlopt.cpp
   src/UniformBspline.cpp

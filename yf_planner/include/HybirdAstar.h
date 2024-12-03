@@ -26,7 +26,7 @@ enum NodeState
   NOT_EXPAND
 };
 
-class PathNode
+class HybirdAstarPathNode
 {
 public:
   /* -------------------- */
@@ -37,24 +37,24 @@ public:
   double duration;
   double time; // dynamic
   int time_idx;
-  PathNode *cameFrom;
+  HybirdAstarPathNode *cameFrom;
   NodeState node_state;
 
   /* -------------------- */
-  PathNode()
+  HybirdAstarPathNode()
   {
     cameFrom = NULL;
     node_state = NodeState::NOT_EXPAND;
   }
-  ~PathNode() {};
+  ~HybirdAstarPathNode() {};
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
-typedef PathNode *PathNodePtr;
+typedef HybirdAstarPathNode *HybirdAstarPathNodePtr;
 
 class NodeComparator
 {
 public:
-  bool operator()(PathNodePtr node1, PathNodePtr node2)
+  bool operator()(HybirdAstarPathNodePtr node1, HybirdAstarPathNodePtr node2)
   {
     return node1->f_score > node2->f_score;
   }
@@ -80,30 +80,30 @@ class NodeHashTable
 {
 private:
   /* data */
-  std::unordered_map<Eigen::Vector3i, PathNodePtr, matrix_hash<Eigen::Vector3i>>
+  std::unordered_map<Eigen::Vector3i, HybirdAstarPathNodePtr, matrix_hash<Eigen::Vector3i>>
       data_3d_;
-  std::unordered_map<Eigen::Vector4i, PathNodePtr, matrix_hash<Eigen::Vector4i>>
+  std::unordered_map<Eigen::Vector4i, HybirdAstarPathNodePtr, matrix_hash<Eigen::Vector4i>>
       data_4d_;
 
 public:
   NodeHashTable(/* args */) {}
   ~NodeHashTable() {}
-  void insert(Eigen::Vector3i idx, PathNodePtr node)
+  void insert(Eigen::Vector3i idx, HybirdAstarPathNodePtr node)
   {
     data_3d_.insert(std::make_pair(idx, node));
   }
-  void insert(Eigen::Vector3i idx, int time_idx, PathNodePtr node)
+  void insert(Eigen::Vector3i idx, int time_idx, HybirdAstarPathNodePtr node)
   {
     data_4d_.insert(std::make_pair(
         Eigen::Vector4i(idx(0), idx(1), idx(2), time_idx), node));
   }
 
-  PathNodePtr find(Eigen::Vector3i idx)
+  HybirdAstarPathNodePtr find(Eigen::Vector3i idx)
   {
     auto iter = data_3d_.find(idx);
     return iter == data_3d_.end() ? NULL : iter->second;
   }
-  PathNodePtr find(Eigen::Vector3i idx, int time_idx)
+  HybirdAstarPathNodePtr find(Eigen::Vector3i idx, int time_idx)
   {
     auto iter =
         data_4d_.find(Eigen::Vector4i(idx(0), idx(1), idx(2), time_idx));
@@ -169,10 +169,10 @@ public:
   std::vector<Eigen::Vector3d> getKinoTraj(double delta_t);
 
   /** @brief 获取混合A*搜索结果的动作序列     */
-  std::vector<PathNodePtr> getPathNodes();
+  std::vector<HybirdAstarPathNodePtr> getHybirdAstarPathNodes();
 
   /** @brief 获取混合A*搜索遍历过的节点     */
-  std::vector<PathNodePtr> getVisitedNodes();
+  std::vector<HybirdAstarPathNodePtr> getVisitedNodes();
   std::vector<Eigen::Vector3d> getVisitedPath(double delta_t);
 
   std::vector<Eigen::Vector3d> getAllMotions(double delta_t);
@@ -216,11 +216,11 @@ private:
 
   /* ---------- main data structure ---------- */
   int allocate_num_;
-  std::vector<PathNodePtr> path_node_pool_; //  预先分配的节点
+  std::vector<HybirdAstarPathNodePtr> path_node_pool_; //  预先分配的节点
 
   int use_node_num_;                    // = path_nodes_.size() + open_set_.size()
-  std::vector<PathNodePtr> path_nodes_; // 记录结果的节点
-  std::priority_queue<PathNodePtr, std::vector<PathNodePtr>, NodeComparator> open_set_;
+  std::vector<HybirdAstarPathNodePtr> path_nodes_; // 记录结果的节点
+  std::priority_queue<HybirdAstarPathNodePtr, std::vector<HybirdAstarPathNodePtr>, NodeComparator> open_set_;
 
   NodeHashTable expanded_nodes_; // 记录所有遍历过的节点，为了查找节点时是否已经被遍历
 
@@ -237,7 +237,7 @@ private:
   /* helper */
   Eigen::Vector3i PosToIndex(Eigen::Vector3d pt);
   int TimeToIndex(double time);
-  void retrievePath(PathNodePtr end_node, std::vector<PathNodePtr> &path_nodes);
+  void retrievePath(HybirdAstarPathNodePtr end_node, std::vector<HybirdAstarPathNodePtr> &path_nodes);
 
   /**
    * @brief 使用多项式 (a*t^3 + b*t^2 + v0*t + p0) 计算一段直线轨迹
