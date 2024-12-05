@@ -67,8 +67,6 @@ HybirdAstar:
   cost_axis_weight_y: 1.0
   cost_axis_weight_z: 1.0
 
-
-
 PathNlopt:
   max_vel: 3.0 # 会被目标点覆盖
   max_acc: 2.0

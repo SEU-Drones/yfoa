@@ -327,6 +327,8 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     trajectory_.acceleration_traj_ = trajectory_.velocity_traj_.getDerivative();
     trajectory_.duration_ = trajectory_.position_traj_.getTimeSum();
 
+    std::cout<<"opt: "<<trajectory_.position_traj_.evaluateDeBoorT(0.0).transpose()<<std::endl;
+
     // trajectory_.traj_id_ += 1;
     // trajectory_.position_traj_ = UniformBspline(pathnlopt_ptr_->getMatrixOptimizeTraj(), degree, time_interval);
     // trajectory_.velocity_traj_ = trajectory_.position_traj_.getDerivative();
@@ -483,6 +485,7 @@ void PlanFSM::execFSMCallback(const ros::TimerEvent &e)
 
         getLocalTarget(trajectory_.end_mavstate, trajectory_.start_mavstate, target_mavstate_, planning_horizon_);
 
+        // bool success = callReplan(trajectory_.start_mavstate, trajectory_.end_mavstate, false);
         bool success = callReplan(trajectory_.start_mavstate, trajectory_.end_mavstate, true);
 
         if (success)

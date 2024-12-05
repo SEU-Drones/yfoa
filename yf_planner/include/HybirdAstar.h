@@ -147,13 +147,13 @@ public:
   /**
    * @brief 混合A*搜索
    *
-   * @param init FALSE表示使用当前的加速度，TRUE表示使用离散的最大加速度采样。当初始加速度为0时，init需要为true，否则跑不出第一个栅格
+   * @param init TRUE表示使用当前的加速度，FALSE表示使用离散的最大加速度采样。当初始速度\加速度为0时，init需要为true，否则跑不出第一个栅格
    * @param horizon 表示搜索轨迹的最大长度
    * @param dynamic  表示搜索的轨迹是否有时间戳
    * @param time_start 表示搜索的轨迹时间戳的起始时间
    */
   int search(Eigen::Vector3d start_pt, Eigen::Vector3d start_vel, Eigen::Vector3d start_acc, Eigen::Vector3d end_pt, Eigen::Vector3d end_vel,
-             bool init, double horizon, bool dynamic = false, double time_start = -1.0);
+             bool init_search, double horizon, bool dynamic = false, double time_start = -1.0);
 
   void setPhysicLimits(double max_vel, double max_acc)
   {

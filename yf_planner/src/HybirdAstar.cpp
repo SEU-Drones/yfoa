@@ -110,19 +110,16 @@ bool HybirdAstar::isOccupied(Eigen::Vector3d pos, double thr)
 
 int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen::Vector3d start_a,
                         Eigen::Vector3d end_pt, Eigen::Vector3d end_v,
-                        bool init, double horizon, bool dynamic, double time_start)
+                        bool init_search, double horizon, bool dynamic, double time_start)
 {
   clearLastSearchData();
 
-  // // handle start and end
-  // if (start_acc_.norm() < 0.1)
-  // {
-  //   init = false;
-  //   std::cout << "[hybird astar]: start acceleration is too small. And convert to discrete acceleration initialization! " << std::endl;
-  // }
-
-  start_vel_ = start_v;
-  start_acc_ = start_a;
+  // handle start and end
+  if (start_a.norm() < 0.1 && start_v.norm() < 0.1)
+  {
+    init_search = false;
+    std::cout << "[hybird astar]: start acceleration and velocity is too small. And convert to discrete acceleration initialization! " << std::endl;
+  }
 
   HybirdAstarPathNodePtr cur_node = path_node_pool_[0];
   cur_node->cameFrom = NULL;
@@ -158,7 +155,7 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
 
   // HybirdAstarPathNodePtr neighbor = NULL;
   HybirdAstarPathNodePtr terminate_node = NULL;
-  bool init_search = init;
+  // bool init_search = init;
   const int tolerance = ceil(no_search_dist_ / resolution_);
 
   while (!open_set_.empty())
@@ -240,7 +237,7 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
 
     if (init_search)
     {
-      inputs.push_back(start_acc_);
+      inputs.push_back(start_a);
       for (double tau = time_res_init * init_max_tau_; tau <= init_max_tau_ + 1e-3;
            tau += time_res_init * init_max_tau_)
         durations.push_back(tau);
