@@ -301,7 +301,7 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
 
     pathnlopt_ptr_->setOptVar(ctrl_pts);
     pathnlopt_ptr_->optimize();
-    opt_path = pathnlopt_ptr_->getOptimizeTraj();
+    opt_path = pathnlopt_ptr_->getOptimal();
     t2 = std::chrono::system_clock::now();
     std::cout << "FSM  optimize: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
 
@@ -309,7 +309,7 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     // publishPoints(search_path, optpath_pts_pub_);
 
     // trajectory_.start_time_ = ros::Time::now();
-    trajectory_.position_traj_ = UniformBspline(pathnlopt_ptr_->getMatrixOptimizeTraj(), 3, time_interval);
+    trajectory_.position_traj_ = UniformBspline(pathnlopt_ptr_->getMatrixOptimal(), 3, time_interval);
     trajectory_.velocity_traj_ = trajectory_.position_traj_.getDerivative();
     trajectory_.acceleration_traj_ = trajectory_.velocity_traj_.getDerivative();
     trajectory_.start_pos_ = trajectory_.position_traj_.evaluateDeBoorT(0.0);

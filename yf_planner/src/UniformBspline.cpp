@@ -207,78 +207,6 @@ void UniformBspline::lengthenTime(const double &ratio)
 
 // void UniformBspline::recomputeInit() {}
 
-void UniformBspline::parameterizeToBspline(const double &ts, const vector<Eigen::Vector3d> &wps,
-                                           const vector<Eigen::Vector3d> &start_end_derivative,
-                                           Eigen::MatrixXd &cps)
-{
-  if (ts <= 0)
-  {
-    std::cout << "[B-spline]:time step error." << std::endl;
-    return;
-  }
-
-  if (wps.size() <= 3)
-  {
-    std::cout << "[B-spline]:point set have only " << wps.size() << " points." << std::endl;
-    return;
-  }
-
-  if (start_end_derivative.size() != 4)
-  {
-    std::cout << "[B-spline]:derivatives error." << std::endl;
-  }
-
-  int K = wps.size();
-
-  // write A
-  Eigen::Vector3d prow(3), vrow(3), arow(3);
-  prow << 1, 4, 1;
-  vrow << -1, 0, 1;
-  arow << 1, -2, 1;
-
-  Eigen::MatrixXd A = Eigen::MatrixXd::Zero(K + 4, K + 2);
-
-  for (int i = 0; i < K; ++i)
-    A.block(i, i, 1, 3) = (1 / 6.0) * prow.transpose();
-
-  A.block(K, 0, 1, 3) = (1 / 2.0 / ts) * vrow.transpose();
-  A.block(K + 1, K - 1, 1, 3) = (1 / 2.0 / ts) * vrow.transpose();
-
-  A.block(K + 2, 0, 1, 3) = (1 / ts / ts) * arow.transpose();
-  A.block(K + 3, K - 1, 1, 3) = (1 / ts / ts) * arow.transpose();
-
-  // cout << "A" << endl << A << endl << endl;
-
-  // write b
-  Eigen::VectorXd bx(K + 4), by(K + 4), bz(K + 4);
-  for (int i = 0; i < K; ++i)
-  {
-    bx(i) = wps[i](0);
-    by(i) = wps[i](1);
-    bz(i) = wps[i](2);
-  }
-
-  for (int i = 0; i < 4; ++i)
-  {
-    bx(K + i) = start_end_derivative[i](0);
-    by(K + i) = start_end_derivative[i](1);
-    bz(K + i) = start_end_derivative[i](2);
-  }
-
-  // solve Ax = b
-  Eigen::VectorXd px = A.colPivHouseholderQr().solve(bx);
-  Eigen::VectorXd py = A.colPivHouseholderQr().solve(by);
-  Eigen::VectorXd pz = A.colPivHouseholderQr().solve(bz);
-
-  // convert to control pts
-  cps.resize(3, K + 2);
-  cps.row(0) = px.transpose();
-  cps.row(1) = py.transpose();
-  cps.row(2) = pz.transpose();
-
-  // cout << "[B-spline]: parameterization ok." << endl;
-}
-
 // void UniformBspline::parameterizeToBspline(const double &ts, const vector<Eigen::Vector3d> &wps,
 //                                            const vector<Eigen::Vector3d> &start_end_derivative,
 //                                            Eigen::MatrixXd &cps)
@@ -295,6 +223,11 @@ void UniformBspline::parameterizeToBspline(const double &ts, const vector<Eigen:
 //     return;
 //   }
 
+//   if (start_end_derivative.size() != 4)
+//   {
+//     std::cout << "[B-spline]:derivatives error." << std::endl;
+//   }
+
 //   int K = wps.size();
 
 //   // write A
@@ -303,7 +236,7 @@ void UniformBspline::parameterizeToBspline(const double &ts, const vector<Eigen:
 //   vrow << -1, 0, 1;
 //   arow << 1, -2, 1;
 
-//   Eigen::MatrixXd A = Eigen::MatrixXd::Zero(K + 2, K + 2);
+//   Eigen::MatrixXd A = Eigen::MatrixXd::Zero(K + 4, K + 2);
 
 //   for (int i = 0; i < K; ++i)
 //     A.block(i, i, 1, 3) = (1 / 6.0) * prow.transpose();
@@ -311,10 +244,13 @@ void UniformBspline::parameterizeToBspline(const double &ts, const vector<Eigen:
 //   A.block(K, 0, 1, 3) = (1 / 2.0 / ts) * vrow.transpose();
 //   A.block(K + 1, K - 1, 1, 3) = (1 / 2.0 / ts) * vrow.transpose();
 
+//   A.block(K + 2, 0, 1, 3) = (1 / ts / ts) * arow.transpose();
+//   A.block(K + 3, K - 1, 1, 3) = (1 / ts / ts) * arow.transpose();
+
 //   // cout << "A" << endl << A << endl << endl;
 
 //   // write b
-//   Eigen::VectorXd bx(K + 2), by(K + 2), bz(K + 2);
+//   Eigen::VectorXd bx(K + 4), by(K + 4), bz(K + 4);
 //   for (int i = 0; i < K; ++i)
 //   {
 //     bx(i) = wps[i](0);
@@ -322,7 +258,7 @@ void UniformBspline::parameterizeToBspline(const double &ts, const vector<Eigen:
 //     bz(i) = wps[i](2);
 //   }
 
-//   for (int i = 0; i < 2; ++i)
+//   for (int i = 0; i < 4; ++i)
 //   {
 //     bx(K + i) = start_end_derivative[i](0);
 //     by(K + i) = start_end_derivative[i](1);
@@ -342,6 +278,70 @@ void UniformBspline::parameterizeToBspline(const double &ts, const vector<Eigen:
 
 //   // cout << "[B-spline]: parameterization ok." << endl;
 // }
+
+void UniformBspline::parameterizeToBspline(const double &ts, const vector<Eigen::Vector3d> &wps,
+                                           const vector<Eigen::Vector3d> &start_end_derivative,
+                                           Eigen::MatrixXd &cps)
+{
+  if (ts <= 0)
+  {
+    std::cout << "[B-spline]:time step error." << std::endl;
+    return;
+  }
+
+  if (wps.size() <= 3)
+  {
+    std::cout << "[B-spline]:point set have only " << wps.size() << " points." << std::endl;
+    return;
+  }
+
+  int K = wps.size();
+
+  // write A
+  Eigen::Vector3d prow(3), vrow(3), arow(3);
+  prow << 1, 4, 1;
+  vrow << -1, 0, 1;
+  arow << 1, -2, 1;
+
+  Eigen::MatrixXd A = Eigen::MatrixXd::Zero(K + 2, K + 2);
+
+  for (int i = 0; i < K; ++i)
+    A.block(i, i, 1, 3) = (1 / 6.0) * prow.transpose();
+
+  A.block(K, 0, 1, 3) = (1 / 2.0 / ts) * vrow.transpose();
+  A.block(K + 1, K - 1, 1, 3) = (1 / 2.0 / ts) * vrow.transpose();
+
+  // cout << "A" << endl << A << endl << endl;
+
+  // write b
+  Eigen::VectorXd bx(K + 2), by(K + 2), bz(K + 2);
+  for (int i = 0; i < K; ++i)
+  {
+    bx(i) = wps[i](0);
+    by(i) = wps[i](1);
+    bz(i) = wps[i](2);
+  }
+
+  for (int i = 0; i < 2; ++i)
+  {
+    bx(K + i) = start_end_derivative[i](0);
+    by(K + i) = start_end_derivative[i](1);
+    bz(K + i) = start_end_derivative[i](2);
+  }
+
+  // solve Ax = b
+  Eigen::VectorXd px = A.colPivHouseholderQr().solve(bx);
+  Eigen::VectorXd py = A.colPivHouseholderQr().solve(by);
+  Eigen::VectorXd pz = A.colPivHouseholderQr().solve(bz);
+
+  // convert to control pts
+  cps.resize(3, K + 2);
+  cps.row(0) = px.transpose();
+  cps.row(1) = py.transpose();
+  cps.row(2) = pz.transpose();
+
+  // cout << "[B-spline]: parameterization ok." << endl;
+}
 
 double UniformBspline::getTimeSum()
 {

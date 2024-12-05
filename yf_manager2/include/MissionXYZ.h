@@ -30,10 +30,9 @@
 #include <sensor_msgs/PointCloud2.h>
 
 #include "yf_manager2/WayPoints.h"
-#include "yf_manager2/Bspline.h"
+#include "yf_manager2/Splines.h"
 
-#include "UniformBspline.h"
-
+#include "QuinticSpline.h"
 struct Point
 {
     Eigen::Vector3d pos;
@@ -90,7 +89,7 @@ private:
 
     int control_mode_;
     bool receive_traj_;
-    std::vector<UniformBspline> traj_;
+    QuinticSpline traj_;
     double traj_duration_;
     ros::Time start_time_;
     int traj_id_;
@@ -100,7 +99,7 @@ private:
     double last_yaw_, last_yaw_dot_;
     double time_forward_;
 
-    std::string handle_wpts_xy_,handle_wpts_z_;
+    std::string handle_wpts_xy_, handle_wpts_z_;
 
     void setHome(nav_msgs::Odometry odom, Point &home);
     void sendWayPoints(std::vector<Point> wayPoints);
@@ -109,7 +108,7 @@ private:
     void missionCallback(const ros::TimerEvent &e); // Timer for workflow control, send WayPoints
 
     void stateCallback(const mavros_msgs::State::ConstPtr &msg); // subscribe the mav flight mode
-    void bsplineCallback(yf_manager2::BsplineConstPtr msg);
+    void splinesCallback(yf_manager2::SplinesConstPtr msg);
     void localOdomCallback(const nav_msgs::OdometryConstPtr &msg); // subscribe the mav odom
     void rvizCallback(const geometry_msgs::PoseStampedConstPtr &msg);
 

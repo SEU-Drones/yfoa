@@ -1,3 +1,9 @@
+/*
+ * @description:
+ * @param:
+ * @input:
+ * @output:
+ */
 #ifndef PATHNLOPT_H
 #define PATHNLOPT_H
 
@@ -83,8 +89,8 @@ public:
     void optimize();
 
     // get函数
-    std::vector<Eigen::Vector3d> getOptimizeTraj();
-    Eigen::MatrixXd getMatrixOptimizeTraj();
+    std::vector<Eigen::Vector3d> getOptimal();
+    Eigen::MatrixXd getMatrixOptimal();
 
     typedef std::shared_ptr<PathNlopt> Ptr;
 

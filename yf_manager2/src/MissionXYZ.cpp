@@ -3,7 +3,7 @@
  * @Author:       yong
  * @Date: 2022-10-19
  * @LastEditors: Please set LastEditors
- * @LastEditTime: 2024-11-25 17:16:27
+ * @LastEditTime: 2024-12-05 15:42:13
  * @Description:
  * @Subscriber:
  * @Publisher:
@@ -38,8 +38,7 @@ void MissionXYZ::init(ros::NodeHandle node)
     node.param("mission/control_mode", control_mode_, 2);
     node.param<std::string>("mission/handle_wpts_xy", handle_wpts_xy_, "UseOffboardPoint");
     node.param<std::string>("mission/handle_wpts_z", handle_wpts_z_, "UseOffboardHeight");
-
-    
+    node.param("mission/time_forward_to_yaw", time_forward_, 0.5);
 
     mission_fsm_timer_ = node.createTimer(ros::Duration(0.10), &MissionXYZ::missionCallback, this);
     cmd_timer_ = node.createTimer(ros::Duration(0.05), &MissionXYZ::cmdCallback, this);
@@ -47,7 +46,7 @@ void MissionXYZ::init(ros::NodeHandle node)
     state_sub_ = node.subscribe("/mavros/state", 10, &MissionXYZ::stateCallback, this);
     odom_sub_ = node.subscribe("/odom", 10, &MissionXYZ::localOdomCallback, this);
     rviz_sub_ = node.subscribe("/move_base_simple/goal", 10, &MissionXYZ::rvizCallback, this);
-    bspline_sub_ = node.subscribe("/planner/bspline", 1, &MissionXYZ::bsplineCallback, this);
+    bspline_sub_ = node.subscribe("/planner/quinticspline", 1, &MissionXYZ::splinesCallback, this);
 
     wps_pub_ = node.advertise<yf_manager2::WayPoints>("/mission/waypoints", 10, this);
     setpoint_raw_local_pub_ = node.advertise<mavros_msgs::PositionTarget>("/mavros/setpoint_raw/local", 10);
@@ -59,8 +58,6 @@ void MissionXYZ::init(ros::NodeHandle node)
     sendflag_ = true;
     k_ = 0;
     traj_id_ = 0;
-
-    time_forward_ = 1.0;
     receive_traj_ = false;
 
     changeMissionState(mission_fsm_state_, MISSION_STATE::IDLE);
@@ -109,21 +106,23 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
         {
             std::cout << "[mission]  the OFFBOARD position(x,y,z,yaw): " << pos_sp_.transpose() << ", " << yaw_sp_ * 53.7 << std::endl;
             // 当前高度作为目标点高度
-            for (int i = 0; i < wps_.size(); i++){
-                if(handle_wpts_xy_ == "UseArmmingPoint"){
+            for (int i = 0; i < wps_.size(); i++)
+            {
+                if (handle_wpts_xy_ == "UseArmmingPoint")
+                {
                     wps_[i].pos[0] += home_.pos[0];
                     wps_[i].pos[1] += home_.pos[1];
                 }
-                else if(handle_wpts_xy_ == "UseOffboardPoint"){
+                else if (handle_wpts_xy_ == "UseOffboardPoint")
+                {
                     wps_[i].pos[0] += odom_.pose.pose.position.z;
                     wps_[i].pos[1] += odom_.pose.pose.position.y;
                 }
 
-                if(handle_wpts_z_ == "UseSetHeight")
+                if (handle_wpts_z_ == "UseSetHeight")
                     wps_[i].pos[2] += home_.pos[2];
-                else if(handle_wpts_z_ == "UseOffboardHeight")
+                else if (handle_wpts_z_ == "UseOffboardHeight")
                     wps_[i].pos[2] = odom_.pose.pose.position.z;
-
             }
 
             changeMissionState(mission_fsm_state_, MISSION_STATE::MOVE);
@@ -268,46 +267,48 @@ void MissionXYZ::localOdomCallback(const nav_msgs::OdometryConstPtr &msg)
     odom_ = *msg;
 }
 
-void MissionXYZ::bsplineCallback(yf_manager2::BsplineConstPtr msg)
+void MissionXYZ::splinesCallback(yf_manager2::SplinesConstPtr msg)
 {
     // parse pos traj
-
-    Eigen::MatrixXd pos_pts(3, msg->pos_pts.size());
-
-    Eigen::VectorXd knots(msg->knots.size());
-    for (size_t i = 0; i < msg->knots.size(); ++i)
-    {
-        knots(i) = msg->knots[i];
-    }
-
-    for (size_t i = 0; i < msg->pos_pts.size(); ++i)
-    {
-        pos_pts(0, i) = msg->pos_pts[i].x;
-        pos_pts(1, i) = msg->pos_pts[i].y;
-        pos_pts(2, i) = msg->pos_pts[i].z;
-    }
-
-    UniformBspline pos_traj(pos_pts, msg->order, 0.1);
-    pos_traj.setKnot(knots);
-
-    // parse yaw traj
-
-    // Eigen::MatrixXd yaw_pts(msg->yaw_pts.size(), 1);
-    // for (int i = 0; i < msg->yaw_pts.size(); ++i) {
-    //   yaw_pts(i, 0) = msg->yaw_pts[i];
-    // }
-
-    // UniformBspline yaw_traj(yaw_pts, msg->order, msg->yaw_dt);
-
     start_time_ = msg->start_time;
     traj_id_ = msg->traj_id;
+    traj_duration_ = msg->time_pts[msg->time_pts.size() - 1] - msg->time_pts[0];
 
-    traj_.clear();
-    traj_.push_back(pos_traj);
-    traj_.push_back(traj_[0].getDerivative());
-    traj_.push_back(traj_[1].getDerivative());
+    std::vector<double> time_pts;
+    for (size_t i = 0; i < msg->time_pts.size(); ++i)
+        time_pts.push_back(msg->time_pts[i]);
 
-    traj_duration_ = traj_[0].getTimeSum();
+    std::vector<Eigen::MatrixXd> coeffs;
+    Eigen::MatrixXd coeff_x(msg->segments.size(), 6);
+    Eigen::MatrixXd coeff_y(msg->segments.size(), 6);
+    Eigen::MatrixXd coeff_z(msg->segments.size(), 6);
+
+    for (size_t j = 0; j < msg->segments.size(); j++)
+    {
+        for (size_t k = 0; k < 6; k++)
+        {
+            coeff_x(j, k) = msg->segments[j].coeffs_x[k];
+            coeff_y(j, k) = msg->segments[j].coeffs_y[k];
+            coeff_z(j, k) = msg->segments[j].coeffs_z[k];
+        }
+    }
+    coeffs.push_back(coeff_x);
+    coeffs.push_back(coeff_y);
+    coeffs.push_back(coeff_z);
+
+    traj_ = QuinticSpline(3, time_pts, coeffs);
+
+    std::vector<Eigen::Vector3d> temp2_path;
+    double duration = traj_.getTimePts()[traj_.getTimePts().size() - 1];
+    double delta = 0.1;
+    for (int i = 0; i < int(duration / delta); i++)
+    {
+        Eigen::VectorXd pos;
+        traj_.samplePos(i * delta, pos);
+
+        temp2_path.push_back(pos);
+    }
+    publishPoints(temp2_path, posactual_vis_pub_);
 
     receive_traj_ = true;
 }
@@ -331,97 +332,97 @@ void MissionXYZ::rvizCallback(const geometry_msgs::PoseStampedConstPtr &msg)
     wps_pub_.publish(way_points);
 }
 
-std::pair<double, double> MissionXYZ::calculate_yaw(double t_cur, Eigen::Vector3d &pos, ros::Time &time_now, ros::Time &time_last)
-{
-    constexpr double PI = 3.1415926;
-    constexpr double YAW_DOT_MAX_PER_SEC = PI;
-    // constexpr double YAW_DOT_DOT_MAX_PER_SEC = PI;
-    std::pair<double, double> yaw_yawdot(0, 0);
-    double yaw = 0;
-    double yawdot = 0;
+// std::pair<double, double> MissionXYZ::calculate_yaw(double t_cur, Eigen::Vector3d &pos, ros::Time &time_now, ros::Time &time_last)
+// {
+//     constexpr double PI = 3.1415926;
+//     constexpr double YAW_DOT_MAX_PER_SEC = PI;
+//     // constexpr double YAW_DOT_DOT_MAX_PER_SEC = PI;
+//     std::pair<double, double> yaw_yawdot(0, 0);
+//     double yaw = 0;
+//     double yawdot = 0;
 
-    Eigen::Vector3d dir = t_cur + time_forward_ <= traj_duration_ ? traj_[0].evaluateDeBoorT(t_cur + time_forward_) - pos : traj_[0].evaluateDeBoorT(traj_duration_) - pos;
-    double yaw_temp = dir.norm() > 0.1 ? atan2(dir(1), dir(0)) : last_yaw_;
-    double max_yaw_change = YAW_DOT_MAX_PER_SEC * (time_now - time_last).toSec();
-    if (yaw_temp - last_yaw_ > PI)
-    {
-        if (yaw_temp - last_yaw_ - 2 * PI < -max_yaw_change)
-        {
-            yaw = last_yaw_ - max_yaw_change;
-            if (yaw < -PI)
-                yaw += 2 * PI;
+//     Eigen::Vector3d dir = t_cur + time_forward_ <= traj_duration_ ? traj_[0].evaluateDeBoorT(t_cur + time_forward_) - pos : traj_[0].evaluateDeBoorT(traj_duration_) - pos;
+//     double yaw_temp = dir.norm() > 0.1 ? atan2(dir(1), dir(0)) : last_yaw_;
+//     double max_yaw_change = YAW_DOT_MAX_PER_SEC * (time_now - time_last).toSec();
+//     if (yaw_temp - last_yaw_ > PI)
+//     {
+//         if (yaw_temp - last_yaw_ - 2 * PI < -max_yaw_change)
+//         {
+//             yaw = last_yaw_ - max_yaw_change;
+//             if (yaw < -PI)
+//                 yaw += 2 * PI;
 
-            yawdot = -YAW_DOT_MAX_PER_SEC;
-        }
-        else
-        {
-            yaw = yaw_temp;
-            if (yaw - last_yaw_ > PI)
-                yawdot = -YAW_DOT_MAX_PER_SEC;
-            else
-                yawdot = (yaw_temp - last_yaw_) / (time_now - time_last).toSec();
-        }
-    }
-    else if (yaw_temp - last_yaw_ < -PI)
-    {
-        if (yaw_temp - last_yaw_ + 2 * PI > max_yaw_change)
-        {
-            yaw = last_yaw_ + max_yaw_change;
-            if (yaw > PI)
-                yaw -= 2 * PI;
+//             yawdot = -YAW_DOT_MAX_PER_SEC;
+//         }
+//         else
+//         {
+//             yaw = yaw_temp;
+//             if (yaw - last_yaw_ > PI)
+//                 yawdot = -YAW_DOT_MAX_PER_SEC;
+//             else
+//                 yawdot = (yaw_temp - last_yaw_) / (time_now - time_last).toSec();
+//         }
+//     }
+//     else if (yaw_temp - last_yaw_ < -PI)
+//     {
+//         if (yaw_temp - last_yaw_ + 2 * PI > max_yaw_change)
+//         {
+//             yaw = last_yaw_ + max_yaw_change;
+//             if (yaw > PI)
+//                 yaw -= 2 * PI;
 
-            yawdot = YAW_DOT_MAX_PER_SEC;
-        }
-        else
-        {
-            yaw = yaw_temp;
-            if (yaw - last_yaw_ < -PI)
-                yawdot = YAW_DOT_MAX_PER_SEC;
-            else
-                yawdot = (yaw_temp - last_yaw_) / (time_now - time_last).toSec();
-        }
-    }
-    else
-    {
-        if (yaw_temp - last_yaw_ < -max_yaw_change)
-        {
-            yaw = last_yaw_ - max_yaw_change;
-            if (yaw < -PI)
-                yaw += 2 * PI;
+//             yawdot = YAW_DOT_MAX_PER_SEC;
+//         }
+//         else
+//         {
+//             yaw = yaw_temp;
+//             if (yaw - last_yaw_ < -PI)
+//                 yawdot = YAW_DOT_MAX_PER_SEC;
+//             else
+//                 yawdot = (yaw_temp - last_yaw_) / (time_now - time_last).toSec();
+//         }
+//     }
+//     else
+//     {
+//         if (yaw_temp - last_yaw_ < -max_yaw_change)
+//         {
+//             yaw = last_yaw_ - max_yaw_change;
+//             if (yaw < -PI)
+//                 yaw += 2 * PI;
 
-            yawdot = -YAW_DOT_MAX_PER_SEC;
-        }
-        else if (yaw_temp - last_yaw_ > max_yaw_change)
-        {
-            yaw = last_yaw_ + max_yaw_change;
-            if (yaw > PI)
-                yaw -= 2 * PI;
+//             yawdot = -YAW_DOT_MAX_PER_SEC;
+//         }
+//         else if (yaw_temp - last_yaw_ > max_yaw_change)
+//         {
+//             yaw = last_yaw_ + max_yaw_change;
+//             if (yaw > PI)
+//                 yaw -= 2 * PI;
 
-            yawdot = YAW_DOT_MAX_PER_SEC;
-        }
-        else
-        {
-            yaw = yaw_temp;
-            if (yaw - last_yaw_ > PI)
-                yawdot = -YAW_DOT_MAX_PER_SEC;
-            else if (yaw - last_yaw_ < -PI)
-                yawdot = YAW_DOT_MAX_PER_SEC;
-            else
-                yawdot = (yaw_temp - last_yaw_) / (time_now - time_last).toSec();
-        }
-    }
+//             yawdot = YAW_DOT_MAX_PER_SEC;
+//         }
+//         else
+//         {
+//             yaw = yaw_temp;
+//             if (yaw - last_yaw_ > PI)
+//                 yawdot = -YAW_DOT_MAX_PER_SEC;
+//             else if (yaw - last_yaw_ < -PI)
+//                 yawdot = YAW_DOT_MAX_PER_SEC;
+//             else
+//                 yawdot = (yaw_temp - last_yaw_) / (time_now - time_last).toSec();
+//         }
+//     }
 
-    if (fabs(yaw - last_yaw_) <= max_yaw_change)
-        yaw = 0.5 * last_yaw_ + 0.5 * yaw; // nieve LPF
-    yawdot = 0.5 * last_yaw_dot_ + 0.5 * yawdot;
-    last_yaw_ = yaw;
-    last_yaw_dot_ = yawdot;
+//     if (fabs(yaw - last_yaw_) <= max_yaw_change)
+//         yaw = 0.5 * last_yaw_ + 0.5 * yaw; // nieve LPF
+//     yawdot = 0.5 * last_yaw_dot_ + 0.5 * yawdot;
+//     last_yaw_ = yaw;
+//     last_yaw_dot_ = yawdot;
 
-    yaw_yawdot.first = yaw;
-    yaw_yawdot.second = yawdot;
+//     yaw_yawdot.first = yaw;
+//     yaw_yawdot.second = yawdot;
 
-    return yaw_yawdot;
-}
+//     return yaw_yawdot;
+// }
 
 void MissionXYZ::sendCmd(Eigen::Vector3d pos_sp, Eigen::Vector3d vel_sp, Eigen::Vector3d acc_sp, double yaw_sp, int cmode)
 {
@@ -478,12 +479,13 @@ void MissionXYZ::cmdCallback(const ros::TimerEvent &e)
         static ros::Time time_last = ros::Time::now();
         if (t_cur < traj_duration_ && t_cur >= 0.0)
         {
-            pos_sp_ = traj_[0].evaluateDeBoorT(t_cur);
-            vel_sp_ = traj_[1].evaluateDeBoorT(t_cur);
-            acc_sp_ = traj_[2].evaluateDeBoorT(t_cur);
+            traj_.samplePos(t_cur, pos_sp_);
+            traj_.sampleVel(t_cur, vel_sp_);
+            traj_.sampleAcc(t_cur, acc_sp_);
+            traj_.sampleYaw(t_cur, yaw_sp_, time_forward_);
 
             /*** calculate yaw ***/
-            yaw_yawdot = calculate_yaw(t_cur, pos_sp_, time_now, time_last);
+            // yaw_yawdot = calculate_yaw(t_cur, pos_sp_, time_now, time_last);
             /*** calculate yaw ***/
 
             // double tf = std::min(traj_duration_, t_cur + 2.0);
@@ -492,7 +494,7 @@ void MissionXYZ::cmdCallback(const ros::TimerEvent &e)
         else if (t_cur >= traj_duration_)
         {
             /* hover when finish traj_ */
-            pos_sp_ = traj_[0].evaluateDeBoorT(traj_duration_);
+            traj_.samplePos(traj_duration_, pos_sp_);
             vel_sp_.setZero();
             acc_sp_.setZero();
 
@@ -503,11 +505,11 @@ void MissionXYZ::cmdCallback(const ros::TimerEvent &e)
         }
         else
         {
-            cout << "[Traj server]: invalid time." << endl;
+            std::cout << "[Traj server]: invalid time." << std::endl;
         }
         time_last = time_now;
 
-        yaw_sp_ = yaw_yawdot.first;
+        // yaw_sp_ = yaw_yawdot.first;
 
         sendCmd(pos_sp_, vel_sp_, acc_sp_, yaw_sp_, control_mode_);
 
@@ -520,8 +522,8 @@ void MissionXYZ::cmdCallback(const ros::TimerEvent &e)
             pos_cmds_.clear();
     }
 
-    pos_actual_.push_back(Eigen::Vector3d{odom_.pose.pose.position.x, odom_.pose.pose.position.y, odom_.pose.pose.position.z});
-    publishPoints(pos_actual_, posactual_vis_pub_);
+    // pos_actual_.push_back(Eigen::Vector3d{odom_.pose.pose.position.x, odom_.pose.pose.position.y, odom_.pose.pose.position.z});
+    // publishPoints(pos_actual_, posactual_vis_pub_);
 }
 
 double MissionXYZ::quaternion_to_yaw(geometry_msgs::Quaternion &q)

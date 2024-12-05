@@ -194,11 +194,11 @@ void PathNlopt::combineCost(const std::vector<double> &x, std::vector<double> &g
     f_feasibility_ = f_feasibility;
 
     grad_3D.col(0) = Eigen::Vector3d{0, 0, 0};
-    grad_3D.col(1) = Eigen::Vector3d{0, 0, 0};
-    grad_3D.col(2) = Eigen::Vector3d{0, 0, 0};
+    // grad_3D.col(1) = Eigen::Vector3d{0, 0, 0};
+    // grad_3D.col(2) = Eigen::Vector3d{0, 0, 0};
 
-    grad_3D.col(traj_pts_num_ - 1) = Eigen::Vector3d{0, 0, 0};
-    grad_3D.col(traj_pts_num_ - 2) = Eigen::Vector3d{0, 0, 0};
+    // grad_3D.col(traj_pts_num_ - 1) = Eigen::Vector3d{0, 0, 0};
+    // grad_3D.col(traj_pts_num_ - 2) = Eigen::Vector3d{0, 0, 0};
 
     // for (int i = 0; i < grad_3D.cols(); i++) // 不优化z轴
     //     grad_3D(2, i) = 0;
@@ -373,7 +373,7 @@ void PathNlopt::Vector2MatrixXd(std::vector<double> vec, Eigen::MatrixXd &mat, i
     }
 }
 
-std::vector<Eigen::Vector3d> PathNlopt::getOptimizeTraj()
+std::vector<Eigen::Vector3d> PathNlopt::getOptimal()
 {
     std::vector<Eigen::Vector3d> path;
 
@@ -385,7 +385,7 @@ std::vector<Eigen::Vector3d> PathNlopt::getOptimizeTraj()
     return path;
 }
 
-Eigen::MatrixXd PathNlopt::getMatrixOptimizeTraj()
+Eigen::MatrixXd PathNlopt::getMatrixOptimal()
 {
     return optimize_traj_;
 }

@@ -19,13 +19,13 @@
 #include <sensor_msgs/Image.h>
 #include <tf/transform_broadcaster.h>
 
-#include "yf_manager2/Bspline.h"
 #include "yf_manager2/WayPoints.h"
+#include "yf_manager2/Splines.h"
 
 #include "InESDFMap.hpp"
 #include "Astar.h"
 #include "PathNlopt.h"
-#include "UniformBspline.h"
+#include "QuinticSpline.h"
 
 enum FsmState
 {
@@ -82,8 +82,8 @@ struct MAVTraj
     double duration_;
     double global_time_offset; // This is because when the local traj finished and is going to switch back to the global traj, the global traj time is no longer matches the world time.
     ros::Time start_time_;
-    Eigen::Vector3d start_pos_;
-    UniformBspline position_traj_, velocity_traj_, acceleration_traj_;
+    // UniformBspline position_traj_, velocity_traj_, acceleration_traj_;
+    QuinticSpline position_traj_;
 };
 
 class PlanFSM
@@ -99,7 +99,7 @@ private:
     MAVTraj trajectory_;
 
     ros::Timer fsm_timer_, map_timer_;
-    ros::Publisher bspline_pub_;
+    ros::Publisher quintic_pub_;
 
     typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, nav_msgs::Odometry>
         SyncPolicyImageOdom;
@@ -126,7 +126,7 @@ private:
     double no_replan_thresh_, replan_thresh_, collsion_check_dist_;
     FsmState plan_fsm_state_;
     bool callReplan(MAVState start, MAVState end);
-    void changeFSMExecState(FsmState new_state, string pos_call);
+    void changeFSMExecState(FsmState new_state, std::string pos_call);
     void getLocalTarget(MAVState &target, MAVState cur, MAVState end, double length);
     void execFSMCallback(const ros::TimerEvent &e);
 

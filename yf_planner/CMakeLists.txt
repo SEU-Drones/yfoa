@@ -40,10 +40,12 @@ add_library(yf_planner
   include/HybirdAstar.h
   include/PathNlopt.h
   include/UniformBspline.h
+  include/QuinticSpline.h
   src/Astar.cpp
   src/HybirdAstar.cpp
   src/PathNlopt.cpp
   src/UniformBspline.cpp
+  src/QuinticSpline.cpp
 )
 
 target_link_libraries(yf_planner

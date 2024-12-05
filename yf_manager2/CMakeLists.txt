@@ -41,6 +41,9 @@ add_message_files(
 
   WayPoints.msg
   Bspline.msg
+  Spline.msg
+  Splines.msg
+
 )
 
 generate_messages(
