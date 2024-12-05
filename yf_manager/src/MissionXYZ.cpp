@@ -511,7 +511,7 @@ void MissionXYZ::cmdCallback(const ros::TimerEvent &e)
 
         sendCmd(pos_sp_, vel_sp_, acc_sp_, yaw_sp_, control_mode_);
 
-        // std::cout << traj_id_ << "    " << ros::Time::now().toSec() << " " << t_cur << " " << pos_sp_.transpose() << "  " << vel_sp_.transpose() << "  " << acc_sp_.transpose() << std::endl;
+        std::cout << traj_id_ << "    " << ros::Time::now().toSec() << " " << t_cur << " " << pos_sp_.transpose() << "  " << vel_sp_.transpose() << "  " << acc_sp_.transpose() << std::endl;
         // std::cout << "[mission] " << yaw_sp_ << ", " << yaw_sp_ * 53.7 << std::endl;
 
         pos_cmds_.push_back(pos_sp_);

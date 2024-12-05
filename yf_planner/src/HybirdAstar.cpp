@@ -153,9 +153,7 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
     expanded_nodes_.insert(cur_node->index, cur_node);
   }
 
-  // HybirdAstarPathNodePtr neighbor = NULL;
   HybirdAstarPathNodePtr terminate_node = NULL;
-  // bool init_search = init;
   const int tolerance = ceil(no_search_dist_ / resolution_);
 
   while (!open_set_.empty())
@@ -179,6 +177,8 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
         // Check whether shot traj exist
         estimateHeuristic(cur_node->state, end_state, time_to_goal, max_vel_);
         is_shot_succ_ = computeShotTraj(cur_node->state, end_state, time_to_goal, coef_shot_, t_shot_);
+        // is_shot_succ_ = computeLineTraj(cur_node->state, end_state, time_to_goal, coef_shot_, t_shot_);
+        
         if (init_search)
         {
           std::cout << "[hybird astar] ERROR, Shot in first search loop!" << std::endl;
@@ -443,6 +443,27 @@ void HybirdAstar::retrievePath(HybirdAstarPathNodePtr end_node, std::vector<Hybi
   reverse(path_nodes.begin(), path_nodes.end());
 }
 
+bool HybirdAstar::computeLineTraj(Eigen::VectorXd state1, Eigen::VectorXd state2, double time_to_goal, Eigen::MatrixXd &coef_shot, double &t_shot)
+{
+  const Eigen::Vector3d p0 = state1.head(3);
+  const Eigen::Vector3d dp = state2.head(3) - p0;
+  const Eigen::Vector3d v0 = state1.segment(3, 3);
+  const Eigen::Vector3d v1 = state2.segment(3, 3);
+  const Eigen::Vector3d dv = v1 - v0;
+  Eigen::MatrixXd coef(3, 2);
+  double t_d = std::max(dp[0]/(v0[0]+v1[0]),dp[1]/(v0[1]+v1[1]));
+  t_d = std::max(t_d,dp[2]/(v0[2]+v1[2]));
+  for(int i=0;i<3;i++)
+  {
+    coef(i,0) = p0(i);
+    coef(i,1) = dp(i) / t_d;
+  }
+
+  coef_shot = coef;
+  t_shot = t_d;
+  return true;
+}
+
 bool HybirdAstar::computeShotTraj(Eigen::VectorXd state1, Eigen::VectorXd state2, double time_to_goal, Eigen::MatrixXd &coef_shot, double &t_shot)
 {
   // x = a^3*t^3 + b^2*t^2 + c*t + d;
@@ -453,16 +474,15 @@ bool HybirdAstar::computeShotTraj(Eigen::VectorXd state1, Eigen::VectorXd state2
   const Eigen::Vector3d v1 = state2.segment(3, 3);
   const Eigen::Vector3d dv = v1 - v0;
   double t_d = time_to_goal;
+  // double t_d = std::max(dp[0]/(v0[0]+v1[0]),dp[1]/(v0[1]+v1[1]));
+  // t_d = std::max(t_d,dp[2]/(v0[2]+v1[2]));
+
   Eigen::MatrixXd coef(3, 4);
-  end_vel_ = v1;
 
-  double v_max = max_vel_ * 0.2;
-  t_d = dp.norm() / v_max;
-
-  // Eigen::Vector3d a = 1.0 / 6.0 * (-12.0 / (t_d * t_d * t_d) * (dp - v0 * t_d) + 6 / (t_d * t_d) * dv);
-  // Eigen::Vector3d b = 0.5 * (6.0 / (t_d * t_d) * (dp - v0 * t_d) - 2 / t_d * dv);
-  Eigen::Vector3d a = (2 * t_d * v0 - 2 * dp + t_d * dv) / (t_d * t_d * t_d);
-  Eigen::Vector3d b = (3 * dp - 3 * v0 * t_d - dv * t_d) / (t_d * t_d);
+  Eigen::Vector3d a = 1.0 / 6.0 * (-12.0 / (t_d * t_d * t_d) * (dp - v0 * t_d) + 6 / (t_d * t_d) * dv);
+  Eigen::Vector3d b = 0.5 * (6.0 / (t_d * t_d) * (dp - v0 * t_d) - 2 / t_d * dv);
+  // Eigen::Vector3d a = (2 * t_d * v0 - 2 * dp + t_d * dv) / (t_d * t_d * t_d);
+  // Eigen::Vector3d b = (3 * dp - 3 * v0 * t_d - dv * t_d) / (t_d * t_d);
   Eigen::Vector3d c = v0;
   Eigen::Vector3d d = p0;
 
@@ -494,7 +514,7 @@ bool HybirdAstar::computeShotTraj(Eigen::VectorXd state1, Eigen::VectorXd state2
 
   //     if (fabs(vel(dim)) > max_vel_ || fabs(acc(dim)) > max_acc_)
   //     {
-  //       // cout << "vel:" << vel(dim) << ", acc:" << acc(dim) << endl;
+  //       cout << "vel:" << vel(dim) << ", acc:" << acc(dim) << endl;
   //       // return false;
   //     }
   //   }
@@ -713,6 +733,19 @@ std::vector<Eigen::Vector3d> HybirdAstar::getKinoTraj(double delta_t)
       state_list.push_back(coord);
     }
   }
+
+  // if (is_shot_succ_)
+  // {
+  //   for (double t = delta_t; t <= t_shot_; t += delta_t)
+  //   {
+  //     Eigen::Vector3d coord;
+  //     for (int dim = 0; dim < 3; dim++)
+  //     {
+  //       coord(dim) = coef_shot_(dim,0)+t*coef_shot_(dim,1);
+  //     }
+  //     state_list.push_back(coord);
+  //   }
+  // }
 
   return state_list;
 }

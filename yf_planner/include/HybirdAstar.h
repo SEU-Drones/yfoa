@@ -225,7 +225,7 @@ private:
   NodeHashTable expanded_nodes_; // 记录所有遍历过的节点，为了查找节点时是否已经被遍历
 
   /* ---------- record data ---------- */
-  Eigen::Vector3d start_vel_, end_vel_, start_acc_;
+  // Eigen::Vector3d start_vel_, end_vel_, start_acc_;
 
   bool is_shot_succ_ = false;
   Eigen::MatrixXd coef_shot_;
@@ -247,6 +247,8 @@ private:
    */
   bool computeShotTraj(Eigen::VectorXd state1, Eigen::VectorXd state2, double time_to_goal, Eigen::MatrixXd &coef_shot, double &t_shot);
 
+  bool computeLineTraj(Eigen::VectorXd state1, Eigen::VectorXd state2, double time_to_goal, Eigen::MatrixXd &coef_shot, double &t_shot);
+  
   /** @brief 基于庞特利亚金最小值原理的启发式函数
    * @cost J = \int u^2 dt + \rho T = -c1/(3*T^3) - c2/(2*T^2) - c3/T + w_time_*T;
    */

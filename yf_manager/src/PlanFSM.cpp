@@ -21,7 +21,7 @@ void PlanFSM::init(std::string filename, ros::NodeHandle &nh)
     bspline_pub_ = nh.advertise<yf_manager::Bspline>("/planner/bspline", 1);
 
     map_timer_ = nh.createTimer(ros::Duration(0.066), &PlanFSM::updateMapCallback, this);
-    fsm_timer_ = nh.createTimer(ros::Duration(0.1), &PlanFSM::execFSMCallback, this);
+    fsm_timer_ = nh.createTimer(ros::Duration(0.01), &PlanFSM::execFSMCallback, this);
 
     new_occ_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/map/new_occ", 10);
     new_free_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/map/new_free", 10);
@@ -270,8 +270,9 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
 
     /*搜索初始轨迹*/
     t1 = std::chrono::system_clock::now();
-    std::cout << "[search] " << start.pos.transpose() << "    " << start.vel.transpose() << "    " << start.acc.transpose() << "    " << end.pos.transpose() << std::endl;
-    std::cout << "[search] max_vel: " << trajectory_.max_vel << "    max_acc: " << trajectory_.max_acc << std::endl;
+    std::cout << "[FSM]  plan start time: " << ros::Time::now().toSec() << std::endl;
+    std::cout << ros::Time::now().toSec() << " "<< "[FSM]  search start: " << start.pos.transpose() << "    " << start.vel.transpose() << "    " << start.acc.transpose() << "    " << end.pos.transpose() << std::endl;
+    std::cout << ros::Time::now().toSec() << " "<< "[FSM]  search max_vel: " << trajectory_.max_vel << "    max_acc: " << trajectory_.max_acc << std::endl;
     hybirdastar_ptr_->setPhysicLimits(trajectory_.max_vel, trajectory_.max_acc);
     int search_flag = hybirdastar_ptr_->search(start.pos, start.vel, start.acc, end.pos, end.vel, init, 2 * planning_horizon_);
     if (search_flag != HybirdAstar::REACH_END)
@@ -279,12 +280,12 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     search_path = hybirdastar_ptr_->getKinoTraj(time_interval);
     search_path.insert(search_path.begin(), start.pos);
     t2 = std::chrono::system_clock::now();
-    std::cout << "FSM  search: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
+    std::cout << ros::Time::now().toSec() << " "<< "[FSM]  search time: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
     publishPath(search_path, hybird_pub_);
     // publishPoints(search_path, hybird_pts_pub_);
     // publishPoints(hybirdastar_ptr_->getAllMotions(0.1), smotions_pub_);
-    // std::string filename = "/home/ly/ws_yfoa/traj.txt";
-    // hybirdastar_ptr_->saveTrjToTxt(0.1, filename);
+    std::string filename = "/home/ly/ws_yfoa/traj.txt";
+    hybirdastar_ptr_->saveTrjToTxt(0.1, filename);
 
     /*获取优化变量3xN——b样条的控制点*/
     // std::vector<Eigen::Vector3d> start_end_derivatives;
@@ -308,7 +309,7 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     pathnlopt_ptr_->optimize();
     opt_path = pathnlopt_ptr_->getOptimizeTraj();
     t2 = std::chrono::system_clock::now();
-    std::cout << "FSM  optimize: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
+    std::cout << ros::Time::now().toSec() << " "<< "[FSM]  optimize time: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
     publishPath(opt_path, optpath_pub_);
     // publishPoints(search_path, optpath_pts_pub_);
 
@@ -327,7 +328,9 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     trajectory_.acceleration_traj_ = trajectory_.velocity_traj_.getDerivative();
     trajectory_.duration_ = trajectory_.position_traj_.getTimeSum();
 
-    std::cout<<"opt: "<<trajectory_.position_traj_.evaluateDeBoorT(0.0).transpose()<<std::endl;
+    std::cout<< ros::Time::now().toSec() << " "<<"[FSM]  optimize start: "<<trajectory_.position_traj_.evaluateDeBoorT(0.0).transpose()
+        <<"   "<<trajectory_.velocity_traj_.evaluateDeBoorT(0.0).transpose()
+        <<"   "<<trajectory_.acceleration_traj_.evaluateDeBoorT(0.0).transpose()<<std::endl;
 
     // trajectory_.traj_id_ += 1;
     // trajectory_.position_traj_ = UniformBspline(pathnlopt_ptr_->getMatrixOptimizeTraj(), degree, time_interval);
@@ -335,27 +338,27 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     // trajectory_.acceleration_traj_ = trajectory_.velocity_traj_.getDerivative();
     // trajectory_.duration_ = trajectory_.position_traj_.getTimeSum();
 
-    // {
-    //     double delta = 0.1;
-    //     std::ofstream output_file("/home/ly/ws_yfoa/opttraj.txt");
-    //     // 检查文件是否成功打开
-    //     if (!output_file)
-    //     {
-    //         std::cerr << "无法打开文件" << std::endl;
-    //         exit(0);
-    //     }
+    {
+        double delta = 0.1;
+        std::ofstream output_file("/home/ly/ws_yfoa/opttraj.txt");
+        // 检查文件是否成功打开
+        if (!output_file)
+        {
+            std::cerr << "无法打开文件" << std::endl;
+            exit(0);
+        }
 
-    //     if (output_file.is_open())
-    //     {
-    //         for (int i = 0; i < int(trajectory_.duration_ / delta); i++)
-    //         {
-    //             output_file << i * delta << "," << 0 << ","
-    //                         << trajectory_.position_traj_.evaluateDeBoorT(i * delta)[0] << "," << trajectory_.position_traj_.evaluateDeBoorT(i * delta)[1] << "," << trajectory_.position_traj_.evaluateDeBoorT(i * delta)[2] << ","
-    //                         << trajectory_.velocity_traj_.evaluateDeBoorT(i * delta)[0] << "," << trajectory_.velocity_traj_.evaluateDeBoorT(i * delta)[1] << "," << trajectory_.velocity_traj_.evaluateDeBoorT(i * delta)[2] << ","
-    //                         << trajectory_.acceleration_traj_.evaluateDeBoorT(i * delta)[0] << "," << trajectory_.acceleration_traj_.evaluateDeBoorT(i * delta)[1] << "," << trajectory_.acceleration_traj_.evaluateDeBoorT(i * delta)[2] << "\n";
-    //         }
-    //     }
-    // }
+        if (output_file.is_open())
+        {
+            for (int i = 0; i < int(trajectory_.duration_ / delta); i++)
+            {
+                output_file << i * delta << "," << 0 << ","
+                            << trajectory_.position_traj_.evaluateDeBoorT(i * delta)[0] << "," << trajectory_.position_traj_.evaluateDeBoorT(i * delta)[1] << "," << trajectory_.position_traj_.evaluateDeBoorT(i * delta)[2] << ","
+                            << trajectory_.velocity_traj_.evaluateDeBoorT(i * delta)[0] << "," << trajectory_.velocity_traj_.evaluateDeBoorT(i * delta)[1] << "," << trajectory_.velocity_traj_.evaluateDeBoorT(i * delta)[2] << ","
+                            << trajectory_.acceleration_traj_.evaluateDeBoorT(i * delta)[0] << "," << trajectory_.acceleration_traj_.evaluateDeBoorT(i * delta)[1] << "," << trajectory_.acceleration_traj_.evaluateDeBoorT(i * delta)[2] << "\n";
+            }
+        }
+    }
 
     /*发布轨迹 */
     yf_manager::Bspline bspline;
