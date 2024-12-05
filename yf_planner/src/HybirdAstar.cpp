@@ -114,12 +114,12 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
 {
   clearLastSearchData();
 
-  // handle start and end
-  if (start_acc_.norm() < 0.1)
-  {
-    init = false;
-    std::cout << "[hybird astar]: start acceleration is too small. And convert to discrete acceleration initialization! " << std::endl;
-  }
+  // // handle start and end
+  // if (start_acc_.norm() < 0.1)
+  // {
+  //   init = false;
+  //   std::cout << "[hybird astar]: start acceleration is too small. And convert to discrete acceleration initialization! " << std::endl;
+  // }
 
   start_vel_ = start_v;
   start_acc_ = start_a;
@@ -243,10 +243,7 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
       inputs.push_back(start_acc_);
       for (double tau = time_res_init * init_max_tau_; tau <= init_max_tau_ + 1e-3;
            tau += time_res_init * init_max_tau_)
-      {
         durations.push_back(tau);
-      }
-
       init_search = false;
     }
     else
@@ -467,8 +464,8 @@ bool HybirdAstar::computeShotTraj(Eigen::VectorXd state1, Eigen::VectorXd state2
 
   // Eigen::Vector3d a = 1.0 / 6.0 * (-12.0 / (t_d * t_d * t_d) * (dp - v0 * t_d) + 6 / (t_d * t_d) * dv);
   // Eigen::Vector3d b = 0.5 * (6.0 / (t_d * t_d) * (dp - v0 * t_d) - 2 / t_d * dv);
-  Eigen::Vector3d a = (2*t_d*v0-2*dp+t_d*dv)/(t_d*t_d*t_d);
-  Eigen::Vector3d b = (3*dp-3*v0*t_d-dv*t_d)/(t_d*t_d);
+  Eigen::Vector3d a = (2 * t_d * v0 - 2 * dp + t_d * dv) / (t_d * t_d * t_d);
+  Eigen::Vector3d b = (3 * dp - 3 * v0 * t_d - dv * t_d) / (t_d * t_d);
   Eigen::Vector3d c = v0;
   Eigen::Vector3d d = p0;
 
@@ -505,7 +502,7 @@ bool HybirdAstar::computeShotTraj(Eigen::VectorXd state1, Eigen::VectorXd state2
   //     }
   //   }
   // }
-  
+
   coef_shot = coef;
   t_shot = t_d;
   return true;

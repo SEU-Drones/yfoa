@@ -1,21 +1,21 @@
 #include "UniformBspline.h"
 
-UniformBspline::UniformBspline(const Eigen::MatrixXd &points, const int &order,
+UniformBspline::UniformBspline(const Eigen::MatrixXd &cps, const int &order,
                                const double &interval)
 {
-  setUniformBspline(points, order, interval);
+  setUniformBspline(cps, order, interval);
 }
 
 UniformBspline::~UniformBspline() {}
 
-void UniformBspline::setUniformBspline(const Eigen::MatrixXd &points, const int &order,
+void UniformBspline::setUniformBspline(const Eigen::MatrixXd &cps, const int &order,
                                        const double &interval)
 {
-  control_points_ = points;
+  control_points_ = cps;
   p_ = order;
   interval_ = interval;
 
-  n_ = points.cols() - 1;
+  n_ = cps.cols() - 1;
   m_ = n_ + p_ + 1;
 
   u_ = Eigen::VectorXd::Zero(m_ + 1);

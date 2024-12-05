@@ -13,7 +13,7 @@
         <param name="mission/waypoint0_x" value="35.0" />
         <param name="mission/waypoint0_y" value="0.0" />
         <param name="mission/waypoint0_z" value="0.0" />
-        <param name="mission/waypoint0_vx" value="3.0" />
+        <param name="mission/waypoint0_vx" value="2.0" />
         <param name="mission/waypoint0_vy" value="0.0" />
         <param name="mission/waypoint0_vz" value="0.0" />
         <param name="mission/waypoint0_ax" value="1.0" />

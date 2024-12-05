@@ -257,65 +257,81 @@ bool PlanFSM::collisionCheck(double delta, double min_distance)
 
 bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
 {
+    std::cout << "----------callReplan------------" << std::endl;
     double time_interval;
     std::vector<Eigen::Vector3d> search_path, opt_path;
-    Eigen::MatrixXd ctrl_pts;
-
-    pathnlopt_ptr_->setPhysicLimits(trajectory_.max_vel, trajectory_.max_acc);
-    hybirdastar_ptr_->setPhysicLimits(trajectory_.max_vel, trajectory_.max_acc);
+    Eigen::MatrixXd opt_var;
+    int degree = 3;
 
     time_interval = ctrl_pt_dist_ / trajectory_.max_vel;
     // time_interval = 0.1;
-    pathnlopt_ptr_->setTimeInterval(time_interval);
 
     std::chrono::system_clock::time_point t1, t2;
 
+    /*搜索初始轨迹*/
     t1 = std::chrono::system_clock::now();
+    std::cout << "[search] " << start.pos.transpose() << "    " << start.vel.transpose() << "    " << start.acc.transpose() << "    " << end.pos.transpose() << std::endl;
+    std::cout << "[search] max_vel: " << trajectory_.max_vel << "    max_acc: " << trajectory_.max_acc << std::endl;
+    hybirdastar_ptr_->setPhysicLimits(trajectory_.max_vel, trajectory_.max_acc);
     int search_flag = hybirdastar_ptr_->search(start.pos, start.vel, start.acc, end.pos, end.vel, init, 2 * planning_horizon_);
-    // int search_flag = hybirdastar_ptr_->search(end.pos, end.vel, Eigen::Vector3d{0,0,0}, start.pos, start.vel, init, 2 * planning_horizon_);
     if (search_flag != HybirdAstar::REACH_END)
         return false;
     search_path = hybirdastar_ptr_->getKinoTraj(time_interval);
     search_path.insert(search_path.begin(), start.pos);
     t2 = std::chrono::system_clock::now();
     std::cout << "FSM  search: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
-
     publishPath(search_path, hybird_pub_);
     // publishPoints(search_path, hybird_pts_pub_);
     // publishPoints(hybirdastar_ptr_->getAllMotions(0.1), smotions_pub_);
-
     // std::string filename = "/home/ly/ws_yfoa/traj.txt";
     // hybirdastar_ptr_->saveTrjToTxt(0.1, filename);
 
-    t1 = std::chrono::system_clock::now();
+    /*获取优化变量3xN——b样条的控制点*/
+    // std::vector<Eigen::Vector3d> start_end_derivatives;
+    // start_end_derivatives.push_back(start.vel);
+    // start_end_derivatives.push_back(end.vel);
+    // start_end_derivatives.push_back(start.acc);
+    // start_end_derivatives.push_back(end.acc);
+    // UniformBspline::parameterizeToBspline(time_interval, search_path, start_end_derivatives, opt_var);
+    // if (opt_var.cols() < 3)
+    //     return false;
 
-    // 根据轨迹点，求出控制点
+    opt_var.resize(3, search_path.size());
+    for (int i = 0; i < search_path.size(); i++)
+        opt_var.col(i) = search_path[i];
+
+    /*优化轨迹 */
+    t1 = std::chrono::system_clock::now();
+    pathnlopt_ptr_->setTimeInterval(time_interval);
+    pathnlopt_ptr_->setPhysicLimits(trajectory_.max_vel, trajectory_.max_acc);
+    pathnlopt_ptr_->setOptVar(opt_var);
+    pathnlopt_ptr_->optimize();
+    opt_path = pathnlopt_ptr_->getOptimizeTraj();
+    t2 = std::chrono::system_clock::now();
+    std::cout << "FSM  optimize: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
+    publishPath(opt_path, optpath_pub_);
+    // publishPoints(search_path, optpath_pts_pub_);
+
+    /*轨迹参数化 */
+    Eigen::MatrixXd cps;
     std::vector<Eigen::Vector3d> start_end_derivatives;
     start_end_derivatives.push_back(start.vel);
     start_end_derivatives.push_back(end.vel);
     start_end_derivatives.push_back(start.acc);
     start_end_derivatives.push_back(end.acc);
-    UniformBspline::parameterizeToBspline(time_interval, search_path, start_end_derivatives, ctrl_pts);
-    if (ctrl_pts.cols() < 3)
-        return false;
-
-    pathnlopt_ptr_->setOptVar(ctrl_pts);
-    pathnlopt_ptr_->optimize();
-    opt_path = pathnlopt_ptr_->getOptimizeTraj();
-    t2 = std::chrono::system_clock::now();
-    std::cout << "FSM  optimize: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
-
-    publishPath(opt_path, optpath_pub_);
-    // publishPoints(search_path, optpath_pts_pub_);
-
+    UniformBspline::parameterizeToBspline(time_interval, opt_path, start_end_derivatives, cps);
     // trajectory_.start_time_ = ros::Time::now();
-    trajectory_.position_traj_ = UniformBspline(pathnlopt_ptr_->getMatrixOptimizeTraj(), 3, time_interval);
+    trajectory_.traj_id_ += 1;
+    trajectory_.position_traj_ = UniformBspline(cps, degree, time_interval);
     trajectory_.velocity_traj_ = trajectory_.position_traj_.getDerivative();
     trajectory_.acceleration_traj_ = trajectory_.velocity_traj_.getDerivative();
-    trajectory_.start_pos_ = trajectory_.position_traj_.evaluateDeBoorT(0.0);
     trajectory_.duration_ = trajectory_.position_traj_.getTimeSum();
 
-    trajectory_.traj_id_ += 1;
+    // trajectory_.traj_id_ += 1;
+    // trajectory_.position_traj_ = UniformBspline(pathnlopt_ptr_->getMatrixOptimizeTraj(), degree, time_interval);
+    // trajectory_.velocity_traj_ = trajectory_.position_traj_.getDerivative();
+    // trajectory_.acceleration_traj_ = trajectory_.velocity_traj_.getDerivative();
+    // trajectory_.duration_ = trajectory_.position_traj_.getTimeSum();
 
     // {
     //     double delta = 0.1;
@@ -339,8 +355,9 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     //     }
     // }
 
+    /*发布轨迹 */
     yf_manager::Bspline bspline;
-    bspline.order = 3;
+    bspline.order = degree;
     bspline.start_time = trajectory_.start_time_;
     bspline.traj_id = trajectory_.traj_id_;
 
@@ -459,7 +476,9 @@ void PlanFSM::execFSMCallback(const ros::TimerEvent &e)
     {
         // 获取当前期望的目标点
         // 目标是否处在障碍物内部
-        trajectory_.start_mavstate = current_mavstate_;
+        trajectory_.start_mavstate.pos = current_mavstate_.pos;
+        trajectory_.start_mavstate.vel = current_mavstate_.vel;
+        trajectory_.start_mavstate.acc = Eigen::Vector3d::Zero();
         trajectory_.start_time_ = ros::Time::now();
 
         getLocalTarget(trajectory_.end_mavstate, trajectory_.start_mavstate, target_mavstate_, planning_horizon_);
@@ -495,7 +514,7 @@ void PlanFSM::execFSMCallback(const ros::TimerEvent &e)
             // cout << "near end" << endl;
             return;
         }
-        else if ((trajectory_.start_pos_ - pos).norm() < replan_thresh_)
+        else if ((trajectory_.start_mavstate.pos - pos).norm() < replan_thresh_)
         {
             // cout << "near start" << endl;
             return;
@@ -520,7 +539,8 @@ void PlanFSM::execFSMCallback(const ros::TimerEvent &e)
 
         getLocalTarget(trajectory_.end_mavstate, trajectory_.start_mavstate, target_mavstate_, planning_horizon_);
 
-        bool success = callReplan(trajectory_.start_mavstate, trajectory_.end_mavstate, false);
+        // bool success = callReplan(trajectory_.start_mavstate, trajectory_.end_mavstate, false);
+        bool success = callReplan(trajectory_.start_mavstate, trajectory_.end_mavstate, true);
 
         if (success)
             changeFSMExecState(FsmState::EXEC_TRAJ, "FSM");

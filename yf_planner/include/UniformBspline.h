@@ -1,9 +1,3 @@
-/*
- * @description:
- * @param:
- * @input:
- * @output:
- */
 #ifndef _UNIFORMBSPLINE_H_
 #define _UNIFORMBSPLINE_H_
 
@@ -34,13 +28,13 @@ private:
 
 public:
   UniformBspline() {}
-  UniformBspline(const Eigen::MatrixXd &points, const int &order, const double &interval);
+  UniformBspline(const Eigen::MatrixXd &cps, const int &order, const double &interval);
   ~UniformBspline();
 
   Eigen::MatrixXd get_control_points(void) { return control_points_; }
 
   // initialize as an uniform B-spline
-  void setUniformBspline(const Eigen::MatrixXd &points, const int &order, const double &interval);
+  void setUniformBspline(const Eigen::MatrixXd &cps, const int &order, const double &interval);
 
   // get / set basic bspline info
 
