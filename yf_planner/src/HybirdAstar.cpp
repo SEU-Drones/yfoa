@@ -45,7 +45,7 @@ void HybirdAstar::init(std::string filename, const InESDFMap::Ptr map_ptr, bool 
   inv_resolution_ = 1.0 / resolution_;
   inv_time_resolution_ = 1.0 / time_resolution_;
 
-  map_ptr_ = map_ptr;
+  workspace_ptr_ = map_ptr;
 
   /* ---------- pre-allocated node ---------- */
   path_node_pool_.resize(allocate_num_);
@@ -98,10 +98,10 @@ void HybirdAstar::clearLastSearchData()
 bool HybirdAstar::isOccupied(Eigen::Vector3d pos, double thr)
 {
   if (thr < 0)
-    return map_ptr_->isOccupied(pos);
+    return workspace_ptr_->isOccupied(pos);
   else
   {
-    if (map_ptr_->getDist(pos) < thr)
+    if (workspace_ptr_->getDist(pos) < thr)
       return true;
     else
       return false;
@@ -324,13 +324,13 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
             break;
           }
         }
-
         if (is_occ)
         {
           if (init_search)
             std::cout << "safe" << std::endl;
           continue;
         }
+        // std::cout << workspace_ptr_->getDist(pos) << " " << pos.transpose() << " xx " << std::endl;
 
         double time_to_goal, tmp_g_score, tmp_f_score;
         tmp_g_score = ((cost_axis_weight_ * um).squaredNorm() + w_time_) * tau + cur_node->g_score;

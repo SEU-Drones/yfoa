@@ -13,7 +13,7 @@ class PathNlopt
 {
 private:
     // 工作空间
-    InESDFMap::Ptr map_ptr_;
+    InESDFMap::Ptr workspace_ptr_;
 
     /*目标变量*/
     // 轨迹点

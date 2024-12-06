@@ -2,7 +2,7 @@
 
 void PathNlopt::init(std::string filename, InESDFMap::Ptr map_ptr, bool verbose)
 {
-    map_ptr_ = map_ptr;
+    workspace_ptr_ = map_ptr;
 
     cv::FileStorage fs(filename, cv::FileStorage::READ);
     if (!fs.isOpened())
@@ -54,7 +54,7 @@ void PathNlopt::init(std::string filename, InESDFMap::Ptr map_ptr, bool verbose)
 
 void PathNlopt::setMap(InESDFMap::Ptr map_ptr)
 {
-    map_ptr_ = map_ptr;
+    workspace_ptr_ = map_ptr;
 }
 
 void PathNlopt::setOptVar(Eigen::MatrixXd opt_var)
@@ -334,9 +334,9 @@ void PathNlopt::calcDistanceCost(const Eigen::MatrixXd &q, double &cost, Eigen::
 
     for (int i = 1; i < q.cols() - 1; i++)
     {
-        dist = map_ptr_->getDist(Eigen::Vector3d{q.col(i)[0], q.col(i)[1], q.col(i)[2]});
-        dist_grad = map_ptr_->getGrad(Eigen::Vector3d{q.col(i)[0], q.col(i)[1], q.col(i)[2]});
-        // map_ptr_->getDistAndGrad(q.col(i), dist, dist_grad);
+        dist = workspace_ptr_->getDist(Eigen::Vector3d{q.col(i)[0], q.col(i)[1], q.col(i)[2]});
+        dist_grad = workspace_ptr_->getGrad(Eigen::Vector3d{q.col(i)[0], q.col(i)[1], q.col(i)[2]});
+        // workspace_ptr_->getDistAndGrad(q.col(i), dist, dist_grad);
         if (dist_grad.norm() > 1e-4)
             dist_grad.normalize();
 

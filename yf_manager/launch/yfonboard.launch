@@ -7,48 +7,49 @@
         <param name="mission/control_mode" value="3" />
         <param name="mission/handle_wpts_xy" value="UseOffboardPoint" />
         <param name="mission/handle_wpts_z" value="UseOffboardHeight" />
+        <param name="mission/yf_mission_log_filename" value="$(find yf_manager)/yf_mission.txt" />
 
         <param name="mission/waypoint_num" value="1" />
 
         <param name="mission/waypoint0_x" value="35.0" />
         <param name="mission/waypoint0_y" value="0.0" />
         <param name="mission/waypoint0_z" value="0.0" />
-        <param name="mission/waypoint0_vx" value="3.0" />
-        <param name="mission/waypoint0_vy" value="0.0" />
-        <param name="mission/waypoint0_vz" value="0.0" />
-        <param name="mission/waypoint0_ax" value="2.0" />
-        <param name="mission/waypoint0_ay" value="0.0" />
-        <param name="mission/waypoint0_az" value="0.0" />
+        <param name="mission/waypoint0_vm" value="3.0" />
+        <!-- <param name="mission/waypoint0_vy" value="0.0" />
+        <param name="mission/waypoint0_vz" value="0.0" /> -->
+        <param name="mission/waypoint0_am" value="2.0" />
+        <!-- <param name="mission/waypoint0_ay" value="0.0" />
+        <param name="mission/waypoint0_az" value="0.0" /> -->
 
         <param name="mission/waypoint1_x" value="20.0" />
         <param name="mission/waypoint1_y" value="20.0" />
         <param name="mission/waypoint1_z" value="2.0" />
-        <param name="mission/waypoint1_vx" value="2.0" />
-        <param name="mission/waypoint1_vy" value="0.0" />
-        <param name="mission/waypoint1_vz" value="0.0" />
-        <param name="mission/waypoint1_ax" value="2.0" />
-        <param name="mission/waypoint1_ay" value="0.0" />
-        <param name="mission/waypoint1_az" value="0.0" />
+        <param name="mission/waypoint1_vm" value="2.0" />
+        <!-- <param name="mission/waypoint1_vy" value="0.0" />
+        <param name="mission/waypoint1_vz" value="0.0" /> -->
+        <param name="mission/waypoint1_am" value="2.0" />
+        <!-- <param name="mission/waypoint1_ay" value="0.0" />
+        <param name="mission/waypoint1_az" value="0.0" /> -->
 
         <param name="mission/waypoint2_x" value="0.0" />
         <param name="mission/waypoint2_y" value="20.0" />
         <param name="mission/waypoint2_z" value="2.0" />
-        <param name="mission/waypoint2_vx" value="2.0" />
-        <param name="mission/waypoint2_vy" value="0.0" />
-        <param name="mission/waypoint2_vz" value="0.0" />
-        <param name="mission/waypoint2_ax" value="2.0" />
-        <param name="mission/waypoint2_ay" value="0.0" />
-        <param name="mission/waypoint2_az" value="0.0" />
+        <param name="mission/waypoint2_vm" value="2.0" />
+        <!-- <param name="mission/waypoint2_vy" value="0.0" />
+        <param name="mission/waypoint2_vz" value="0.0" /> -->
+        <param name="mission/waypoint2_am" value="2.0" />
+        <!-- <param name="mission/waypoint2_ay" value="0.0" />
+        <param name="mission/waypoint2_az" value="0.0" /> -->
 
         <param name="mission/waypoint3_x" value="0.0" />
         <param name="mission/waypoint3_y" value="0.0" />
         <param name="mission/waypoint3_z" value="2.0" />
-        <param name="mission/waypoint3_vx" value="2.0" />
-        <param name="mission/waypoint3_vy" value="0.0" />
-        <param name="mission/waypoint3_vz" value="0.0" />
-        <param name="mission/waypoint3_ax" value="2.0" />
-        <param name="mission/waypoint3_ay" value="0.0" />
-        <param name="mission/waypoint3_az" value="0.0" />
+        <param name="mission/waypoint3_vm" value="2.0" />
+        <!-- <param name="mission/waypoint3_vy" value="0.0" />
+        <param name="mission/waypoint3_vz" value="0.0" /> -->
+        <param name="mission/waypoint3_am" value="2.0" />
+        <!-- <param name="mission/waypoint3_ay" value="0.0" />
+        <param name="mission/waypoint3_az" value="0.0" /> -->
     </node>
 
     <node pkg="yf_manager" name="PlanFSM_node" type="PlanFSM_node" output="screen">

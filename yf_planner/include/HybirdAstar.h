@@ -147,7 +147,7 @@ public:
   /**
    * @brief 混合A*搜索
    *
-   * @param init TRUE表示使用当前的加速度，FALSE表示使用离散的最大加速度采样。当初始速度\加速度为0时，init需要为true，否则跑不出第一个栅格
+   * @param init_search TRUE表示使用当前的加速度，FALSE表示使用离散的最大加速度采样。当初始速度\加速度为0时，init_search需要为false，否则跑不出第一个栅格
    * @param horizon 表示搜索轨迹的最大长度
    * @param dynamic  表示搜索的轨迹是否有时间戳
    * @param time_start 表示搜索的轨迹时间戳的起始时间
@@ -161,6 +161,20 @@ public:
     max_acc_ = max_acc;
   };
 
+  double getResolution()
+  {
+    return resolution_;
+  }
+
+  double getMinDistance()
+  {
+    return min_dist_;
+  }
+
+  void setMinDistance(double dist)
+  {
+    min_dist_ = dist;
+  }
   /**
    * @brief 获取混合A*搜索结果的轨迹
    *
@@ -193,7 +207,7 @@ public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
 private:
-  InESDFMap::Ptr map_ptr_;
+  InESDFMap::Ptr workspace_ptr_;
 
   /* map */
   double resolution_, inv_resolution_, time_resolution_, inv_time_resolution_;

@@ -17,6 +17,7 @@
 #include <vector>
 #include <Eigen/Eigen>
 #include <cmath>
+#include <fstream>
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -43,6 +44,9 @@ struct Point
     double latitude;  // 纬度
     double yaw;
     double yaw_dot;
+
+    double max_vel;
+    double max_acc;
 };
 
 enum ControlMode
@@ -73,7 +77,8 @@ private:
         READY,
         TAKEOFF,
         MOVE,
-        LAND
+        LAND,
+        FAULT
     };
 
     ros::Timer mission_fsm_timer_, cmd_timer_;
@@ -86,7 +91,9 @@ private:
     bool has_odom_;
     bool sendOneByOne_;
     bool sendflag_;
+    bool cmd_heart_;
     int k_;
+    std::ofstream yf_mission_file_;
 
     int control_mode_;
     bool receive_traj_;
@@ -100,7 +107,7 @@ private:
     double last_yaw_, last_yaw_dot_;
     double time_forward_;
 
-    std::string handle_wpts_xy_,handle_wpts_z_;
+    std::string handle_wpts_xy_, handle_wpts_z_;
 
     void setHome(nav_msgs::Odometry odom, Point &home);
     void sendWayPoints(std::vector<Point> wayPoints);

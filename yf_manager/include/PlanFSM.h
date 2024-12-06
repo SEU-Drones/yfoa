@@ -18,6 +18,7 @@
 #include <nav_msgs/Path.h>
 #include <sensor_msgs/Image.h>
 #include <tf/transform_broadcaster.h>
+#include <mavros_msgs/State.h>
 
 #include "yf_manager/Bspline.h"
 #include "yf_manager/WayPoints.h"
@@ -26,6 +27,16 @@
 #include "HybirdAstar.h"
 #include "PathNlopt.h"
 #include "UniformBspline.h"
+
+// // 定义颜色代码
+// #define RESET   "\033[0m"
+// #define RED     "\033[31m"      /* 红色 */
+// #define GREEN   "\033[32m"      /* 绿色 */
+// #define YELLOW  "\033[33m"      /* 黄色 */
+// #define BLUE    "\033[34m"      /* 蓝色 */
+// #define MAGENTA "\033[35m"      /* 品红 */
+// #define CYAN    "\033[36m"      /* 青色 */
+// #define WHITE   "\033[37m"      /* 白色 */
 
 enum FsmState
 {
@@ -89,7 +100,7 @@ class PlanFSM
 {
 private:
     PathNlopt::Ptr pathnlopt_ptr_;
-    InESDFMap::Ptr map_ptr_;
+    InESDFMap::Ptr workspace_ptr_;
     HybirdAstar::Ptr hybirdastar_ptr_;
 
     double ctrl_pt_dist_;
@@ -99,7 +110,6 @@ private:
 
     ros::Timer fsm_timer_, map_timer_;
     ros::Publisher bspline_pub_;
-
     typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, nav_msgs::Odometry>
         SyncPolicyImageOdom;
     typedef std::shared_ptr<message_filters::Synchronizer<SyncPolicyImageOdom>> SynchronizerImageOdom;
@@ -107,7 +117,7 @@ private:
     std::shared_ptr<message_filters::Subscriber<sensor_msgs::Image>> depth_sub_;
     std::shared_ptr<message_filters::Subscriber<nav_msgs::Odometry>> odom_sub_;
 
-    ros::Subscriber waypoints_sub_, odometry_sub_;
+    ros::Subscriber waypoints_sub_, odometry_sub_, state_sub_;
 
     cameraData camData_;
 
@@ -117,6 +127,7 @@ private:
     void depthOdomCallback(const sensor_msgs::ImageConstPtr &img, const nav_msgs::OdometryConstPtr &odom);
     void updateMapCallback(const ros::TimerEvent &);
 
+    void stateCallback(const mavros_msgs::State::ConstPtr &msg); // subscribe the mav flight mode
     void odometryCallback(const nav_msgs::OdometryConstPtr &msg);
     void waypointsCallback(const yf_manager::WayPointsConstPtr &msg);
 
@@ -131,6 +142,8 @@ private:
 
     bool have_odom_;
     bool have_target_;
+
+    double mapping_time_;
 
     ros::Publisher new_occ_pub_, new_free_pub_, grid_esdf_pub_;
     ros::Publisher hybird_pub_, optpath_pub_;
