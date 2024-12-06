@@ -1,7 +1,7 @@
 %YAML:1.2
 ---
 PlanMap:
-  resolution: 0.2
+  resolution: 0.4
   sogm_size_x: 20
   sogm_size_y: 20
   sogm_size_z: 10
@@ -71,8 +71,8 @@ PathNlopt:
   max_vel: 3.0 # 会被目标点覆盖
   max_acc: 2.0
   min_dist: 2.5
-  lambda_smoothness: 10.0
-  lambda_feasibility: 0.1
+  lambda_smoothness: 1000.0
+  lambda_feasibility: 0.001
   lambda_distance: 1.0
   max_iteration_num: 500
   max_iteration_time: 0.05

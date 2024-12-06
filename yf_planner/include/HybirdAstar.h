@@ -218,7 +218,7 @@ private:
   int allocate_num_;
   std::vector<HybirdAstarPathNodePtr> path_node_pool_; //  预先分配的节点
 
-  int use_node_num_;                    // = path_nodes_.size() + open_set_.size()
+  int use_node_num_;                               // = path_nodes_.size() + open_set_.size()
   std::vector<HybirdAstarPathNodePtr> path_nodes_; // 记录结果的节点
   std::priority_queue<HybirdAstarPathNodePtr, std::vector<HybirdAstarPathNodePtr>, NodeComparator> open_set_;
 
@@ -247,8 +247,8 @@ private:
    */
   bool computeShotTraj(Eigen::VectorXd state1, Eigen::VectorXd state2, double time_to_goal, Eigen::MatrixXd &coef_shot, double &t_shot);
 
-  bool computeLineTraj(Eigen::VectorXd state1, Eigen::VectorXd state2, double time_to_goal, Eigen::MatrixXd &coef_shot, double &t_shot);
-  
+  bool computeLineTraj(Eigen::VectorXd state1, Eigen::VectorXd state2, Eigen::MatrixXd &coef_shot, double &t_shot);
+
   /** @brief 基于庞特利亚金最小值原理的启发式函数
    * @cost J = \int u^2 dt + \rho T = -c1/(3*T^3) - c2/(2*T^2) - c3/T + w_time_*T;
    */

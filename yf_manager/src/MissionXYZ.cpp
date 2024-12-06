@@ -3,7 +3,7 @@
  * @Author:       yong
  * @Date: 2022-10-19
  * @LastEditors: Please set LastEditors
- * @LastEditTime: 2024-11-25 17:16:27
+ * @LastEditTime: 2024-12-06 15:54:36
  * @Description:
  * @Subscriber:
  * @Publisher:
@@ -38,8 +38,6 @@ void MissionXYZ::init(ros::NodeHandle node)
     node.param("mission/control_mode", control_mode_, 2);
     node.param<std::string>("mission/handle_wpts_xy", handle_wpts_xy_, "UseOffboardPoint");
     node.param<std::string>("mission/handle_wpts_z", handle_wpts_z_, "UseOffboardHeight");
-
-    
 
     mission_fsm_timer_ = node.createTimer(ros::Duration(0.10), &MissionXYZ::missionCallback, this);
     cmd_timer_ = node.createTimer(ros::Duration(0.05), &MissionXYZ::cmdCallback, this);
@@ -79,7 +77,6 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
 
     switch (mission_fsm_state_)
     {
-
     case MISSION_STATE::IDLE:
     {
         if (state_.armed == true)
@@ -95,6 +92,7 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
         std::cout << "[mission]  the home position(x,y,z,yaw): " << home_.pos.transpose() << ", " << home_.yaw * 53.7 << std::endl;
 
         changeMissionState(mission_fsm_state_, MISSION_STATE::TAKEOFF);
+
         break;
     }
 
@@ -108,29 +106,29 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
         if (state_.mode == "OFFBOARD")
         {
             std::cout << "[mission]  the OFFBOARD position(x,y,z,yaw): " << pos_sp_.transpose() << ", " << yaw_sp_ * 53.7 << std::endl;
-            // 当前高度作为目标点高度
-            for (int i = 0; i < wps_.size(); i++){
-                if(handle_wpts_xy_ == "UseArmmingPoint"){
+
+            for (int i = 0; i < wps_.size(); i++)
+            {
+                if (handle_wpts_xy_ == "UseArmmingPoint")
+                {
                     wps_[i].pos[0] += home_.pos[0];
                     wps_[i].pos[1] += home_.pos[1];
                 }
-                else if(handle_wpts_xy_ == "UseOffboardPoint"){
+                else if (handle_wpts_xy_ == "UseOffboardPoint")
+                {
                     wps_[i].pos[0] += odom_.pose.pose.position.z;
                     wps_[i].pos[1] += odom_.pose.pose.position.y;
                 }
 
-                if(handle_wpts_z_ == "UseSetHeight")
+                if (handle_wpts_z_ == "UseSetHeight")
                     wps_[i].pos[2] += home_.pos[2];
-                else if(handle_wpts_z_ == "UseOffboardHeight")
+                else if (handle_wpts_z_ == "UseOffboardHeight") // 当前高度作为目标点高度
                     wps_[i].pos[2] = odom_.pose.pose.position.z;
-
             }
 
             changeMissionState(mission_fsm_state_, MISSION_STATE::MOVE);
         }
 
-        if (state_.armed == false)
-            changeMissionState(mission_fsm_state_, MISSION_STATE::IDLE);
         break;
     }
 
@@ -190,6 +188,9 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
             changeMissionState(mission_fsm_state_, MISSION_STATE::IDLE);
         break;
     }
+
+        if (state_.armed == false || state_.mode != "OFFBOARD")
+            changeMissionState(mission_fsm_state_, MISSION_STATE::IDLE);
     }
 }
 
@@ -511,7 +512,7 @@ void MissionXYZ::cmdCallback(const ros::TimerEvent &e)
 
         sendCmd(pos_sp_, vel_sp_, acc_sp_, yaw_sp_, control_mode_);
 
-        std::cout << traj_id_ << "    " << ros::Time::now().toSec() << " " << t_cur << " " << pos_sp_.transpose() << "  " << vel_sp_.transpose() << "  " << acc_sp_.transpose() << std::endl;
+        // std::cout << traj_id_ << "    " << ros::Time::now().toSec() << " " << t_cur << " " << pos_sp_.transpose() << "  " << vel_sp_.transpose() << "  " << acc_sp_.transpose() << std::endl;
         // std::cout << "[mission] " << yaw_sp_ << ", " << yaw_sp_ * 53.7 << std::endl;
 
         pos_cmds_.push_back(pos_sp_);

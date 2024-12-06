@@ -4,7 +4,7 @@
         <remap from="/odom" to="/mavros/local_position/odom"/>
         <param name="mission/sendOneByOne" value="true" />
         <param name="mission/wps_threshold" value="2.0" />
-        <param name="mission/control_mode" value="2" />
+        <param name="mission/control_mode" value="3" />
         <param name="mission/handle_wpts_xy" value="UseOffboardPoint" />
         <param name="mission/handle_wpts_z" value="UseOffboardHeight" />
 

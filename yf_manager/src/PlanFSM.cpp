@@ -21,7 +21,7 @@ void PlanFSM::init(std::string filename, ros::NodeHandle &nh)
     bspline_pub_ = nh.advertise<yf_manager::Bspline>("/planner/bspline", 1);
 
     map_timer_ = nh.createTimer(ros::Duration(0.066), &PlanFSM::updateMapCallback, this);
-    fsm_timer_ = nh.createTimer(ros::Duration(0.01), &PlanFSM::execFSMCallback, this);
+    fsm_timer_ = nh.createTimer(ros::Duration(0.1), &PlanFSM::execFSMCallback, this);
 
     new_occ_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/map/new_occ", 10);
     new_free_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/map/new_free", 10);
@@ -257,22 +257,24 @@ bool PlanFSM::collisionCheck(double delta, double min_distance)
 
 bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
 {
-    std::cout << "----------callReplan------------" << std::endl;
     double time_interval;
     std::vector<Eigen::Vector3d> search_path, opt_path;
     Eigen::MatrixXd opt_var;
     int degree = 3;
 
-    time_interval = ctrl_pt_dist_ / trajectory_.max_vel;
+    time_interval = 2 * ctrl_pt_dist_ / trajectory_.max_vel;
+    // time_interval = ctrl_pt_dist_ / trajectory_.max_vel;
     // time_interval = 0.1;
 
-    std::chrono::system_clock::time_point t1, t2;
+    std::chrono::system_clock::time_point t1, t2, t3, t4;
+    t3 = std::chrono::system_clock::now();
+
+    std::cout << "----------callReplan at " << ros::Time::now() << "------------" << std::endl;
+    std::cout << "[Replan]" << ros::Time::now() << "  max_vel: " << trajectory_.max_vel << "    max_acc: " << trajectory_.max_acc << std::endl;
 
     /*搜索初始轨迹*/
     t1 = std::chrono::system_clock::now();
-    std::cout << "[FSM]  plan start time: " << ros::Time::now().toSec() << std::endl;
-    std::cout << ros::Time::now().toSec() << " "<< "[FSM]  search start: " << start.pos.transpose() << "    " << start.vel.transpose() << "    " << start.acc.transpose() << "    " << end.pos.transpose() << std::endl;
-    std::cout << ros::Time::now().toSec() << " "<< "[FSM]  search max_vel: " << trajectory_.max_vel << "    max_acc: " << trajectory_.max_acc << std::endl;
+    std::cout << "[Replan]" << ros::Time::now() << "  search start: " << start.pos.transpose() << "    " << start.vel.transpose() << "    " << start.acc.transpose() << "    " << end.pos.transpose() << std::endl;
     hybirdastar_ptr_->setPhysicLimits(trajectory_.max_vel, trajectory_.max_acc);
     int search_flag = hybirdastar_ptr_->search(start.pos, start.vel, start.acc, end.pos, end.vel, init, 2 * planning_horizon_);
     if (search_flag != HybirdAstar::REACH_END)
@@ -280,14 +282,17 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     search_path = hybirdastar_ptr_->getKinoTraj(time_interval);
     search_path.insert(search_path.begin(), start.pos);
     t2 = std::chrono::system_clock::now();
-    std::cout << ros::Time::now().toSec() << " "<< "[FSM]  search time: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
+    std::cout << "[Replan]" << ros::Time::now() << "  search duration: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
     publishPath(search_path, hybird_pub_);
     // publishPoints(search_path, hybird_pts_pub_);
     // publishPoints(hybirdastar_ptr_->getAllMotions(0.1), smotions_pub_);
-    std::string filename = "/home/ly/ws_yfoa/traj.txt";
-    hybirdastar_ptr_->saveTrjToTxt(0.1, filename);
 
-    /*获取优化变量3xN——b样条的控制点*/
+    /*获取优化变量3xN*/
+    // 选择路径点
+    opt_var.resize(3, search_path.size());
+    for (int i = 0; i < search_path.size(); i++)
+        opt_var.col(i) = search_path[i];
+    // 选择b样条控制点
     // std::vector<Eigen::Vector3d> start_end_derivatives;
     // start_end_derivatives.push_back(start.vel);
     // start_end_derivatives.push_back(end.vel);
@@ -297,10 +302,6 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     // if (opt_var.cols() < 3)
     //     return false;
 
-    opt_var.resize(3, search_path.size());
-    for (int i = 0; i < search_path.size(); i++)
-        opt_var.col(i) = search_path[i];
-
     /*优化轨迹 */
     t1 = std::chrono::system_clock::now();
     pathnlopt_ptr_->setTimeInterval(time_interval);
@@ -309,11 +310,11 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     pathnlopt_ptr_->optimize();
     opt_path = pathnlopt_ptr_->getOptimizeTraj();
     t2 = std::chrono::system_clock::now();
-    std::cout << ros::Time::now().toSec() << " "<< "[FSM]  optimize time: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
+    std::cout << "[Replan]" << ros::Time::now() << "  optimize duration: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
     publishPath(opt_path, optpath_pub_);
-    // publishPoints(search_path, optpath_pts_pub_);
+    // publishPoints(opt_path, optpath_pts_pub_);
 
-    /*轨迹参数化 */
+    /*轨迹参数化+更新轨迹 */
     Eigen::MatrixXd cps;
     std::vector<Eigen::Vector3d> start_end_derivatives;
     start_end_derivatives.push_back(start.vel);
@@ -324,13 +325,12 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     // trajectory_.start_time_ = ros::Time::now();
     trajectory_.traj_id_ += 1;
     trajectory_.position_traj_ = UniformBspline(cps, degree, time_interval);
+
+    // to do ...时间调整
+
     trajectory_.velocity_traj_ = trajectory_.position_traj_.getDerivative();
     trajectory_.acceleration_traj_ = trajectory_.velocity_traj_.getDerivative();
     trajectory_.duration_ = trajectory_.position_traj_.getTimeSum();
-
-    std::cout<< ros::Time::now().toSec() << " "<<"[FSM]  optimize start: "<<trajectory_.position_traj_.evaluateDeBoorT(0.0).transpose()
-        <<"   "<<trajectory_.velocity_traj_.evaluateDeBoorT(0.0).transpose()
-        <<"   "<<trajectory_.acceleration_traj_.evaluateDeBoorT(0.0).transpose()<<std::endl;
 
     // trajectory_.traj_id_ += 1;
     // trajectory_.position_traj_ = UniformBspline(pathnlopt_ptr_->getMatrixOptimizeTraj(), degree, time_interval);
@@ -338,34 +338,11 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     // trajectory_.acceleration_traj_ = trajectory_.velocity_traj_.getDerivative();
     // trajectory_.duration_ = trajectory_.position_traj_.getTimeSum();
 
-    {
-        double delta = 0.1;
-        std::ofstream output_file("/home/ly/ws_yfoa/opttraj.txt");
-        // 检查文件是否成功打开
-        if (!output_file)
-        {
-            std::cerr << "无法打开文件" << std::endl;
-            exit(0);
-        }
-
-        if (output_file.is_open())
-        {
-            for (int i = 0; i < int(trajectory_.duration_ / delta); i++)
-            {
-                output_file << i * delta << "," << 0 << ","
-                            << trajectory_.position_traj_.evaluateDeBoorT(i * delta)[0] << "," << trajectory_.position_traj_.evaluateDeBoorT(i * delta)[1] << "," << trajectory_.position_traj_.evaluateDeBoorT(i * delta)[2] << ","
-                            << trajectory_.velocity_traj_.evaluateDeBoorT(i * delta)[0] << "," << trajectory_.velocity_traj_.evaluateDeBoorT(i * delta)[1] << "," << trajectory_.velocity_traj_.evaluateDeBoorT(i * delta)[2] << ","
-                            << trajectory_.acceleration_traj_.evaluateDeBoorT(i * delta)[0] << "," << trajectory_.acceleration_traj_.evaluateDeBoorT(i * delta)[1] << "," << trajectory_.acceleration_traj_.evaluateDeBoorT(i * delta)[2] << "\n";
-            }
-        }
-    }
-
     /*发布轨迹 */
     yf_manager::Bspline bspline;
     bspline.order = degree;
     bspline.start_time = trajectory_.start_time_;
     bspline.traj_id = trajectory_.traj_id_;
-
     Eigen::MatrixXd pos_pts = trajectory_.position_traj_.getControlPoint();
     bspline.pos_pts.reserve(pos_pts.cols());
     for (int i = 0; i < pos_pts.cols(); ++i)
@@ -376,15 +353,16 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
         pt.z = pos_pts(2, i);
         bspline.pos_pts.push_back(pt);
     }
-
     Eigen::VectorXd knots = trajectory_.position_traj_.getKnot();
     bspline.knots.reserve(knots.rows());
     for (int i = 0; i < knots.rows(); ++i)
     {
         bspline.knots.push_back(knots(i));
     }
-
     bspline_pub_.publish(bspline);
+
+    t4 = std::chrono::system_clock::now();
+    std::cout << "[FSM]" << ros::Time::now() << "  all planning duration: " << std::chrono::duration_cast<std::chrono::microseconds>(t4 - t3).count() / 1000.0 << " ms" << std::endl;
 
     return true;
 }
