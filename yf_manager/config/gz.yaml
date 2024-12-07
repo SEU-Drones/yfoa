@@ -23,13 +23,6 @@ DepthCamera:
   cx: 320.0
   cy: 240.0
 
-  # heigth: 640 # /camera/depth/image_rect_raw
-  # width: 480
-  # fx: 392.365234375
-  # fy: 392.365234375
-  # cx: 320.01055908203125
-  # cy: 241.12890625
-
   k_depth_scaling_factor: 1000
   depth_maxdist: 10.0
   depth_mindist: 0.5

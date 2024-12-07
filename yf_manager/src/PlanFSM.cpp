@@ -22,8 +22,9 @@ void PlanFSM::init(std::string filename, ros::NodeHandle &nh)
 
     bspline_pub_ = nh.advertise<yf_manager::Bspline>("/planner/bspline", 1);
 
-    map_timer_ = nh.createTimer(ros::Duration(0.066), &PlanFSM::updateMapCallback, this);
-    fsm_timer_ = nh.createTimer(ros::Duration(0.1), &PlanFSM::execFSMCallback, this);
+    map_timer_ = nh.createTimer(ros::Duration(0.05), &PlanFSM::updateMapCallback, this);
+    fsm_timer_ = nh.createTimer(ros::Duration(0.01), &PlanFSM::execFSMCallback, this);
+    heart_timer_ = nh.createTimer(ros::Duration(2.0), &PlanFSM::heartCallback, this);
 
     new_occ_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/map/new_occ", 10);
     new_free_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/map/new_free", 10);
@@ -246,7 +247,8 @@ void PlanFSM::updateMapCallback(const ros::TimerEvent &)
 
 bool PlanFSM::collisionCheck(double delta, double min_distance)
 {
-    for (int i = 0; i < int(0.75 * trajectory_.duration_ / delta); i++)
+    // for (int i = 0; i < int(0.75 * trajectory_.duration_ / delta); i++)
+    for (int i = 0; i < int(trajectory_.duration_ / delta); i++)
     {
         double dist = workspace_ptr_->getDist(Eigen::Vector3d{trajectory_.position_traj_.evaluateDeBoorT(i * delta)[0],
                                                               trajectory_.position_traj_.evaluateDeBoorT(i * delta)[1],
@@ -363,8 +365,7 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     t5 = std::chrono::system_clock::now();
     std::cout << "[Replan]  mapping duration: " << mapping_time_ << " ms" << std::endl;
     std::cout << "[Replan]  search duration: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms" << std::endl;
-    std::cout << "[Replan]  optimize duration: " << std::chrono::duration_cast<std::chrono::microseconds>(t4 - t3).count() / 1000.0 << " ms" << std::endl;
-    std::cout << "[Replan]  all planning duration: " << std::chrono::duration_cast<std::chrono::microseconds>(t5 - t1).count() / 1000.0 << " ms" << std::endl;
+    // std::cout << "[Replan]  optimize duration: " << std::chrono::duration_cast<std::chrono::microseconds>(t4 - t3).count() / 1000.0 << " ms" << std::endl;
     return true;
 }
 
@@ -486,7 +487,11 @@ void PlanFSM::execFSMCallback(const ros::TimerEvent &e)
 
         getLocalTarget(trajectory_.end_mavstate, trajectory_.start_mavstate, target_mavstate_, planning_horizon_);
 
+        std::chrono::system_clock::time_point t1, t2;
+        t1 = std::chrono::system_clock::now();
         bool success = callReplan(trajectory_.start_mavstate, trajectory_.end_mavstate, false);
+        t2 = std::chrono::system_clock::now();
+        std::cout << "\033[32m" << "----------result: " << success << "    duration: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms ------------" << "\033[0m" << std::endl;
 
         if (success)
             changeFSMExecState(FsmState::EXEC_TRAJ, "FSM");
@@ -539,7 +544,11 @@ void PlanFSM::execFSMCallback(const ros::TimerEvent &e)
 
         getLocalTarget(trajectory_.end_mavstate, trajectory_.start_mavstate, target_mavstate_, planning_horizon_);
 
+        std::chrono::system_clock::time_point t1, t2;
+        t1 = std::chrono::system_clock::now();
         bool success = callReplan(trajectory_.start_mavstate, trajectory_.end_mavstate, true);
+        t2 = std::chrono::system_clock::now();
+        std::cout << "\033[32m" << "----------result: " << success << "    duration: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms ------------" << "\033[0m" << std::endl;
 
         if (success)
             changeFSMExecState(FsmState::EXEC_TRAJ, "FSM");
@@ -556,6 +565,12 @@ void PlanFSM::execFSMCallback(const ros::TimerEvent &e)
         break;
     }
     }
+}
+
+void PlanFSM::heartCallback(const ros::TimerEvent &e)
+{
+    static string state_str[7] = {"INIT", "WAIT_TARGET", "GEN_NEW_TRAJ", "REPLAN_TRAJ", "EXEC_TRAJ", "EMERGENCY_STOP"};
+    std::cout << "\033[33m" << "[planner] mode " + state_str[int(plan_fsm_state_)] << "\033[0m" << std::endl;
 }
 
 // 可视化

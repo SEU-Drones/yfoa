@@ -463,7 +463,7 @@ bool HybirdAstar::computeLineTraj(Eigen::VectorXd state1, Eigen::VectorXd state2
 
   coef_shot = coef;
   double k = a / max_acc_;
-  t_shot = 1.5 * k * t_d;
+  t_shot = 1.0 * k * t_d;
   // std::cout << v0.transpose() << "     " << v1.transpose() << "     " << dp.norm() << " " << t_d << "  " << t_shot << std::endl;
 
   return true;

@@ -34,7 +34,6 @@
         <param name="mission/waypoint3_z" value="2.0" />
         <param name="mission/waypoint3_vm" value="2.0" />
         <param name="mission/waypoint3_am" value="2.0" />
-
     </node>
 
     <node pkg="yf_manager" name="PlanFSM_node" type="PlanFSM_node" output="screen">
@@ -42,7 +41,7 @@
         <!-- <remap from="/depth" to="/D455/depth/image_rect_raw"/> -->
         <remap from="/depth" to="/realsense_plugin/camera/depth/image_raw"/>
 
-        <param name="paramfile/path" value="$(find yf_manager)/config/yf.yaml" type="string"/>
+        <param name="paramfile/path" value="$(find yf_manager)/config/seu.yaml" type="string"/>
 
         <param name="fsm/control_point_distance" value='0.4'/>
         <!-- 地图的边界 -->

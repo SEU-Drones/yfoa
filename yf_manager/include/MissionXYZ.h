@@ -81,7 +81,7 @@ private:
         FAULT
     };
 
-    ros::Timer mission_fsm_timer_, cmd_timer_;
+    ros::Timer mission_fsm_timer_, cmd_timer_, heart_timer_;
     ros::Publisher wps_pub_, setpoint_raw_local_pub_;
     ros::Subscriber state_sub_, odom_sub_, rviz_sub_, bspline_sub_;
 
@@ -122,6 +122,7 @@ private:
 
     void sendCmd(Eigen::Vector3d pos_sp, Eigen::Vector3d vel_sp, Eigen::Vector3d acc_sp, double yaw_sp, int cmode);
     void cmdCallback(const ros::TimerEvent &e);
+    void heartCallback(const ros::TimerEvent &e);
 
     std::pair<double, double> calculate_yaw(double t_cur, Eigen::Vector3d &pos, ros::Time &time_now, ros::Time &time_last);
     double quaternion_to_yaw(geometry_msgs::Quaternion &q);

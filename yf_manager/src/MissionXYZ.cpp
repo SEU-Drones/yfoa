@@ -3,7 +3,7 @@
  * @Author:       yong
  * @Date: 2022-10-19
  * @LastEditors: Please set LastEditors
- * @LastEditTime: 2024-12-06 21:58:46
+ * @LastEditTime: 2024-12-07 10:07:12
  * @Description:
  * @Subscriber:
  * @Publisher:
@@ -24,11 +24,7 @@ void MissionXYZ::init(ros::NodeHandle node)
         node.param("mission/waypoint" + std::to_string(i) + "_y", point.pos[1], -1.0);
         node.param("mission/waypoint" + std::to_string(i) + "_z", point.pos[2], -1.0);
         node.param("mission/waypoint" + std::to_string(i) + "_vm", point.max_vel, -1.0);
-        // node.param("mission/waypoint" + std::to_string(i) + "_vy", point.vel[1], -1.0);
-        // node.param("mission/waypoint" + std::to_string(i) + "_vz", point.vel[2], -1.0);
         node.param("mission/waypoint" + std::to_string(i) + "_am", point.max_acc, -1.0);
-        // node.param("mission/waypoint" + std::to_string(i) + "_ay", point.acc[1], -1.0);
-        // node.param("mission/waypoint" + std::to_string(i) + "_az", point.acc[2], -1.0);
         wps_.push_back(point);
     }
     std::cout << "[mission]  the waypoint number: " << wps_.size() << std::endl;
@@ -41,6 +37,7 @@ void MissionXYZ::init(ros::NodeHandle node)
 
     mission_fsm_timer_ = node.createTimer(ros::Duration(0.10), &MissionXYZ::missionCallback, this);
     cmd_timer_ = node.createTimer(ros::Duration(0.05), &MissionXYZ::cmdCallback, this);
+    heart_timer_ = node.createTimer(ros::Duration(2.0), &MissionXYZ::heartCallback, this);
 
     state_sub_ = node.subscribe("/mavros/state", 10, &MissionXYZ::stateCallback, this);
     odom_sub_ = node.subscribe("/odom", 10, &MissionXYZ::localOdomCallback, this);
@@ -569,6 +566,12 @@ void MissionXYZ::cmdCallback(const ros::TimerEvent &e)
 
     // pos_actual_.push_back(Eigen::Vector3d{odom_.pose.pose.position.x, odom_.pose.pose.position.y, odom_.pose.pose.position.z});
     // publishPoints(pos_actual_, posactual_vis_pub_);
+}
+
+void MissionXYZ::heartCallback(const ros::TimerEvent &e)
+{
+    static string state_str[7] = {"IDLE", "READY", "TAKEOFF", "MOVE", "LAND", "FAULT"};
+    std::cout << "\033[34m" << "[mission] mode " << state_str[mission_fsm_state_] << "\033[0m" << std::endl;
 }
 
 double MissionXYZ::quaternion_to_yaw(geometry_msgs::Quaternion &q)

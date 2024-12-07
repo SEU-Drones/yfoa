@@ -108,7 +108,7 @@ private:
 
     MAVTraj trajectory_;
 
-    ros::Timer fsm_timer_, map_timer_;
+    ros::Timer fsm_timer_, map_timer_, heart_timer_;
     ros::Publisher bspline_pub_;
     typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, nav_msgs::Odometry>
         SyncPolicyImageOdom;
@@ -139,6 +139,7 @@ private:
     void changeFSMExecState(FsmState new_state, string pos_call);
     void getLocalTarget(MAVState &target, MAVState cur, MAVState end, double length);
     void execFSMCallback(const ros::TimerEvent &e);
+    void heartCallback(const ros::TimerEvent &e);
 
     bool have_odom_;
     bool have_target_;
