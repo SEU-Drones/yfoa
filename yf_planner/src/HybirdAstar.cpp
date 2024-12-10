@@ -247,7 +247,7 @@ int HybirdAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, Eigen
       for (double tau = time_res_init * init_max_tau_; tau <= init_max_tau_ + 1e-3; tau += time_res_init * init_max_tau_)
         // for (double tau = 0.0; tau <= init_max_tau_ + 1e-3; tau += time_res_init * init_max_tau_)
         durations.push_back(tau);
-      // init_search = false;
+      init_search = false;
     }
     else
     {

@@ -79,8 +79,6 @@ void PathNlopt::optimize()
     /* do optimization using NLopt slover */
     nlopt::opt opt(nlopt::algorithm(algorithm_), variable_num_);
     opt.set_min_objective(PathNlopt::costFunction, this);
-    // opt.set_maxeval(max_iteration_num_[1]);
-    // opt.set_maxtime(max_iteration_time_[1]);
     opt.set_maxeval(max_iteration_num_);  // 设置最大评估次数（迭代次数），300
     opt.set_maxtime(max_iteration_time_); // 设置允许的最的优化时间，0.005s
     opt.set_xtol_rel(1e-5);               // 设置目标函数值变化量停止条件
@@ -126,7 +124,6 @@ void PathNlopt::optimize()
     catch (std::exception &e)
     {
         std::cout << e.what() << std::endl;
-        // break;
     }
 
     // feasloop_++;

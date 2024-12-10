@@ -1,6 +1,7 @@
 #pragma once
 #include <iostream>
 #include <Eigen/Eigen>
+#include <random>
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -138,7 +139,7 @@ private:
     FsmState plan_fsm_state_;
     bool callReplan(MAVState start, MAVState end, bool init);
     void changeFSMExecState(FsmState new_state, string pos_call);
-    void getLocalTarget(MAVState &target, MAVState cur, MAVState end, double length);
+    bool getLocalTarget(MAVState &target, MAVState cur, MAVState end, double length);
     void execFSMCallback(const ros::TimerEvent &e);
     void heartCallback(const ros::TimerEvent &e);
 

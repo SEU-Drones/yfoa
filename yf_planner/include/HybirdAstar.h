@@ -157,7 +157,6 @@ public:
 
       coeffs_.row(i) = A.colPivHouseholderQr().solve(B);
     }
-    std::cout << coeffs_ << std::endl;
     duration_ = duration;
 
     return true;

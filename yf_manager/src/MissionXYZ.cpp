@@ -3,7 +3,7 @@
  * @Author:       yong
  * @Date: 2022-10-19
  * @LastEditors: Please set LastEditors
- * @LastEditTime: 2024-12-09 08:54:50
+ * @LastEditTime: 2024-12-10 15:09:18
  * @Description:
  * @Subscriber:
  * @Publisher:
@@ -351,10 +351,6 @@ void MissionXYZ::planerFlagCallback(const std_msgs::Int16 &msg)
 {
     if (msg.data == 2) // FsmState::GEN_NEW_TRAJ
     {
-        // const double time_out = 0.01; // 对规划时间的估计
-        // ros::Time time_now = ros::Time::now();
-        // double t_stop = (time_now - start_time_).toSec() + time_out;
-        // traj_duration_ = min((ros::Time::now() - start_time_).toSec() + 0.01, traj_duration_);
     }
 
     if (msg.data == 3) // FsmState::REPLAN_TRAJ
@@ -362,7 +358,7 @@ void MissionXYZ::planerFlagCallback(const std_msgs::Int16 &msg)
         // const double time_out = 0.001;
         // ros::Time time_now = ros::Time::now();
         // double t_stop = (time_now - start_time_).toSec() + time_out;
-        traj_duration_ = min((ros::Time::now() - start_time_).toSec() + 0.01, traj_duration_);
+        traj_duration_ = std::min((ros::Time::now() - start_time_).toSec() + 0.1, traj_duration_);
     }
 }
 
