@@ -3,7 +3,7 @@
  * @Author:       yong
  * @Date: 2022-10-19
  * @LastEditors: Please set LastEditors
- * @LastEditTime: 2024-12-07 10:07:12
+ * @LastEditTime: 2024-12-09 08:54:50
  * @Description:
  * @Subscriber:
  * @Publisher:
@@ -43,6 +43,7 @@ void MissionXYZ::init(ros::NodeHandle node)
     odom_sub_ = node.subscribe("/odom", 10, &MissionXYZ::localOdomCallback, this);
     rviz_sub_ = node.subscribe("/move_base_simple/goal", 10, &MissionXYZ::rvizCallback, this);
     bspline_sub_ = node.subscribe("/planner/bspline", 1, &MissionXYZ::bsplineCallback, this);
+    planerflag_sub_ = node.subscribe("/planner/flag", 1, &MissionXYZ::planerFlagCallback, this);
 
     wps_pub_ = node.advertise<yf_manager::WayPoints>("/mission/waypoints", 10);
     setpoint_raw_local_pub_ = node.advertise<mavros_msgs::PositionTarget>("/mavros/setpoint_raw/local", 10);
@@ -282,7 +283,7 @@ void MissionXYZ::changeMissionState(int &mode, int next)
     mode = next;
     // std::cout << "[mission] mode " << next << std::endl;
     static string state_str[7] = {"IDLE", "READY", "TAKEOFF", "MOVE", "LAND", "FAULT"};
-    std::cout << "\033[34m" << "[mission] change mode to " << state_str[mode] << "\033[0m" << std::endl;
+    std::cout << "\033[34m" << ros::Time::now() << "[mission] change mode to " << state_str[mode] << "\033[0m" << std::endl;
 }
 
 void MissionXYZ::stateCallback(const mavros_msgs::State::ConstPtr &msg)
@@ -344,6 +345,25 @@ void MissionXYZ::bsplineCallback(yf_manager::BsplineConstPtr msg)
     traj_duration_ = traj_[0].getTimeSum();
 
     receive_traj_ = true;
+}
+
+void MissionXYZ::planerFlagCallback(const std_msgs::Int16 &msg)
+{
+    if (msg.data == 2) // FsmState::GEN_NEW_TRAJ
+    {
+        // const double time_out = 0.01; // 对规划时间的估计
+        // ros::Time time_now = ros::Time::now();
+        // double t_stop = (time_now - start_time_).toSec() + time_out;
+        // traj_duration_ = min((ros::Time::now() - start_time_).toSec() + 0.01, traj_duration_);
+    }
+
+    if (msg.data == 3) // FsmState::REPLAN_TRAJ
+    {
+        // const double time_out = 0.001;
+        // ros::Time time_now = ros::Time::now();
+        // double t_stop = (time_now - start_time_).toSec() + time_out;
+        traj_duration_ = min((ros::Time::now() - start_time_).toSec() + 0.01, traj_duration_);
+    }
 }
 
 void MissionXYZ::rvizCallback(const geometry_msgs::PoseStampedConstPtr &msg)

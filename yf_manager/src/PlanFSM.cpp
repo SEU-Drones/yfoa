@@ -25,6 +25,7 @@ void PlanFSM::init(std::string filename, ros::NodeHandle &nh)
     map_timer_ = nh.createTimer(ros::Duration(0.05), &PlanFSM::updateMapCallback, this);
     fsm_timer_ = nh.createTimer(ros::Duration(0.01), &PlanFSM::execFSMCallback, this);
     heart_timer_ = nh.createTimer(ros::Duration(2.0), &PlanFSM::heartCallback, this);
+    planerflag_pub_ = nh.advertise<std_msgs::Int16>("/planner/flag", 10);
 
     new_occ_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/map/new_occ", 10);
     new_free_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/map/new_free", 10);
@@ -35,7 +36,7 @@ void PlanFSM::init(std::string filename, ros::NodeHandle &nh)
     hybird_pts_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/planner/hybird_pts", 10);
     optpath_pts_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/planner/optpath_pts", 10);
     pts_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/planner/pts", 10);
-    smotions_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/planner/search_motions", 10);
+    smotions_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/planner/search_motions", 1);
 
     nh.param("fsm/control_point_distance", ctrl_pt_dist_, 0.4);
     nh.param("fsm/planning_horizon", planning_horizon_, 5.0);
@@ -279,12 +280,12 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
 
     /*搜索初始轨迹*/
     t1 = std::chrono::system_clock::now();
+    std::vector<Eigen::Vector3d> start_end_derivatives;
     hybirdastar_ptr_->setPhysicLimits(trajectory_.max_vel, trajectory_.max_acc);
     int search_flag = hybirdastar_ptr_->search(start.pos, start.vel, start.acc, end.pos, end.vel, init, 2 * planning_horizon_);
     if (search_flag != HybirdAstar::REACH_END)
         return false;
-    search_path = hybirdastar_ptr_->getKinoTraj(time_interval);
-    search_path.insert(search_path.begin(), start.pos);
+    hybirdastar_ptr_->getSamples(time_interval, search_path, start_end_derivatives);
     t2 = std::chrono::system_clock::now();
     publishPath(search_path, hybird_pub_);
     // publishPoints(search_path, hybird_pts_pub_);
@@ -317,16 +318,20 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     // publishPoints(opt_path, optpath_pts_pub_);
 
     /*轨迹参数化+更新轨迹 */
-    Eigen::MatrixXd cps;
-    std::vector<Eigen::Vector3d> start_end_derivatives;
-    start_end_derivatives.push_back(start.vel);
-    start_end_derivatives.push_back(end.vel);
-    start_end_derivatives.push_back(start.acc);
-    start_end_derivatives.push_back(end.acc);
-    UniformBspline::parameterizeToBspline(time_interval, opt_path, start_end_derivatives, cps);
     // trajectory_.start_time_ = ros::Time::now();
     trajectory_.traj_id_ += 1;
+    Eigen::MatrixXd cps;
+    // std::vector<Eigen::Vector3d> start_end_derivatives;
+    // start_end_derivatives.push_back(start.vel);
+    // start_end_derivatives.push_back(end.vel);
+    // start_end_derivatives.push_back(start.acc);
+    // start_end_derivatives.push_back(end.acc);
+    UniformBspline::parameterizeToBspline(time_interval, opt_path, start_end_derivatives, cps);
     trajectory_.position_traj_ = UniformBspline(cps, degree, time_interval);
+
+    // /*时间调整 to do ... */
+    // trajectory_.position_traj_.reallocateTime(trajectory_.max_acc, trajectory_.max_vel, 0);
+
     trajectory_.velocity_traj_ = trajectory_.position_traj_.getDerivative();
     trajectory_.acceleration_traj_ = trajectory_.velocity_traj_.getDerivative();
     trajectory_.duration_ = trajectory_.position_traj_.getTimeSum();
@@ -336,8 +341,6 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     // trajectory_.velocity_traj_ = trajectory_.position_traj_.getDerivative();
     // trajectory_.acceleration_traj_ = trajectory_.velocity_traj_.getDerivative();
     // trajectory_.duration_ = trajectory_.position_traj_.getTimeSum();
-
-    /*时间调整 to do ... */
 
     /*发布轨迹 */
     yf_manager::Bspline bspline;
@@ -425,7 +428,7 @@ void PlanFSM::changeFSMExecState(FsmState new_state, string pos_call)
     static string state_str[7] = {"INIT", "WAIT_TARGET", "GEN_NEW_TRAJ", "REPLAN_TRAJ", "EXEC_TRAJ", "EMERGENCY_STOP"};
     int pre_s = int(plan_fsm_state_);
     plan_fsm_state_ = new_state;
-    std::cout << "\033[33m" << "[" + pos_call + "]: from " + state_str[pre_s] + " to " + state_str[int(new_state)] << "\033[0m" << std::endl;
+    std::cout << "\033[33m" << ros::Time::now() << "[" + pos_call + "]: from " + state_str[pre_s] + " to " + state_str[int(new_state)] << "\033[0m" << std::endl;
 }
 
 void PlanFSM::getLocalTarget(MAVState &target, MAVState cur, MAVState end, double length)
@@ -448,10 +451,10 @@ void PlanFSM::getLocalTarget(MAVState &target, MAVState cur, MAVState end, doubl
         target.acc.setZero();
     }
 
-    if (workspace_ptr_->getDist(cur.pos) < hybirdastar_ptr_->getMinDistance() || workspace_ptr_->getDist(target.pos) < hybirdastar_ptr_->getMinDistance())
+    if (workspace_ptr_->getDist(cur.pos) < collsion_check_dist_ || workspace_ptr_->getDist(target.pos) < collsion_check_dist_)
     {
         have_target_ = false;
-        std::cout << "\033[31m" << "----------The start and target are in obstances! " << workspace_ptr_->getDist(cur.pos) << " " << workspace_ptr_->getDist(target.pos) << " ------------" << "\033[0m" << std::endl;
+        std::cout << "\033[31m" << "----------The start (" << cur.pos.transpose() << ") and target (" << target.pos.transpose() << ") are in obstances! " << workspace_ptr_->getDist(cur.pos) << " " << workspace_ptr_->getDist(target.pos) << " ------------" << "\033[0m" << std::endl;
         changeFSMExecState(FsmState::WAIT_TARGET, "FSM");
     }
 }
@@ -484,6 +487,10 @@ void PlanFSM::execFSMCallback(const ros::TimerEvent &e)
         trajectory_.start_mavstate.vel = current_mavstate_.vel;
         trajectory_.start_mavstate.acc = Eigen::Vector3d::Zero();
         trajectory_.start_time_ = ros::Time::now();
+
+        std_msgs::Int16 planer_flag;
+        planer_flag.data = FsmState::GEN_NEW_TRAJ;
+        planerflag_pub_.publish(planer_flag);
 
         getLocalTarget(trajectory_.end_mavstate, trajectory_.start_mavstate, target_mavstate_, planning_horizon_);
 
@@ -542,6 +549,10 @@ void PlanFSM::execFSMCallback(const ros::TimerEvent &e)
         trajectory_.start_mavstate.acc = trajectory_.acceleration_traj_.evaluateDeBoorT(t_cur);
         trajectory_.start_time_ = time_now;
 
+        std_msgs::Int16 planer_flag;
+        planer_flag.data = FsmState::REPLAN_TRAJ;
+        planerflag_pub_.publish(planer_flag);
+
         getLocalTarget(trajectory_.end_mavstate, trajectory_.start_mavstate, target_mavstate_, planning_horizon_);
 
         std::chrono::system_clock::time_point t1, t2;
@@ -570,7 +581,7 @@ void PlanFSM::execFSMCallback(const ros::TimerEvent &e)
 void PlanFSM::heartCallback(const ros::TimerEvent &e)
 {
     static string state_str[7] = {"INIT", "WAIT_TARGET", "GEN_NEW_TRAJ", "REPLAN_TRAJ", "EXEC_TRAJ", "EMERGENCY_STOP"};
-    std::cout << "\033[33m" << "[planner] mode " + state_str[int(plan_fsm_state_)] << "\033[0m" << std::endl;
+    std::cout << "\033[33m" << ros::Time::now() << "[planner] mode " + state_str[int(plan_fsm_state_)] << "\033[0m" << std::endl;
 }
 
 // 可视化

@@ -14,6 +14,7 @@
 #include <message_filters/sync_policies/approximate_time.h>
 #include <message_filters/sync_policies/exact_time.h>
 #include <message_filters/time_synchronizer.h>
+#include <std_msgs/Int16.h>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
 #include <sensor_msgs/Image.h>
@@ -109,7 +110,7 @@ private:
     MAVTraj trajectory_;
 
     ros::Timer fsm_timer_, map_timer_, heart_timer_;
-    ros::Publisher bspline_pub_;
+    ros::Publisher planerflag_pub_, bspline_pub_;
     typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, nav_msgs::Odometry>
         SyncPolicyImageOdom;
     typedef std::shared_ptr<message_filters::Synchronizer<SyncPolicyImageOdom>> SynchronizerImageOdom;

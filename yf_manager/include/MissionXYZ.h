@@ -29,6 +29,7 @@
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <sensor_msgs/PointCloud2.h>
+#include <std_msgs/Int16.h>
 
 #include "yf_manager/WayPoints.h"
 #include "yf_manager/Bspline.h"
@@ -83,7 +84,7 @@ private:
 
     ros::Timer mission_fsm_timer_, cmd_timer_, heart_timer_;
     ros::Publisher wps_pub_, setpoint_raw_local_pub_;
-    ros::Subscriber state_sub_, odom_sub_, rviz_sub_, bspline_sub_;
+    ros::Subscriber state_sub_, odom_sub_, rviz_sub_, bspline_sub_, planerflag_sub_;
 
     std::vector<Eigen::Vector3d> pos_cmds_, pos_actual_;
     ros::Publisher poscmds_vis_pub_, posactual_vis_pub_;
@@ -118,10 +119,12 @@ private:
     void stateCallback(const mavros_msgs::State::ConstPtr &msg); // subscribe the mav flight mode
     void bsplineCallback(yf_manager::BsplineConstPtr msg);
     void localOdomCallback(const nav_msgs::OdometryConstPtr &msg); // subscribe the mav odom
+    void planerFlagCallback(const std_msgs::Int16 &msg);
     void rvizCallback(const geometry_msgs::PoseStampedConstPtr &msg);
 
     void sendCmd(Eigen::Vector3d pos_sp, Eigen::Vector3d vel_sp, Eigen::Vector3d acc_sp, double yaw_sp, int cmode);
     void cmdCallback(const ros::TimerEvent &e);
+
     void heartCallback(const ros::TimerEvent &e);
 
     std::pair<double, double> calculate_yaw(double t_cur, Eigen::Vector3d &pos, ros::Time &time_now, ros::Time &time_last);

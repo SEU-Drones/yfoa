@@ -13,6 +13,7 @@
 #include <Eigen/Eigen>
 
 #include "InESDFMap.hpp"
+// #include "QuinticSpline.h"
 
 using namespace std;
 using namespace Eigen;
@@ -122,6 +123,83 @@ public:
   }
 };
 
+class PolyTraj
+{
+public:
+  PolyTraj() {};
+  bool computeCoefficients(const Eigen::Vector3d &pos0, const Eigen::Vector3d &vel0, const Eigen::Vector3d &acc0,
+                           const Eigen::Vector3d &pos1, const Eigen::Vector3d &vel1, const Eigen::Vector3d &acc1, double duration)
+  {
+    // std::cout << "computeCoefficients " << pos0.transpose() << " " << vel0.transpose() << " " << acc0.transpose() << " --- "
+    //           << pos1.transpose() << " " << vel1.transpose() << " " << acc1.transpose() << " " << duration << std::endl;
+    Eigen::Matrix<double, 6, 6> A;
+    Eigen::Matrix<double, 6, 1> B;
+    // Construct the matrix A and vector B for each dimension
+    double duration2 = duration * duration;
+    double duration3 = duration * duration2;
+    double duration4 = duration * duration3;
+    double duration5 = duration * duration4;
+    for (int i = 0; i < 3; ++i)
+    {
+      A << 1, 0, 0, 0, 0, 0,
+          0, 1, 0, 0, 0, 0,
+          0, 0, 2, 0, 0, 0,
+          1, duration, duration2, duration3, duration4, duration5,
+          0, 1, 2 * duration, 3 * duration2, 4 * duration3, 5 * duration4,
+          0, 0, 2, 6 * duration, 12 * duration2, 20 * duration3;
+
+      B << pos0(i),
+          vel0(i),
+          acc0(i),
+          pos1(i),
+          vel1(i),
+          acc1(i);
+
+      coeffs_.row(i) = A.colPivHouseholderQr().solve(B);
+    }
+    std::cout << coeffs_ << std::endl;
+    duration_ = duration;
+
+    return true;
+  }
+
+  Eigen::Vector3d samplePos(double t)
+  {
+    Eigen::Vector3d result;
+    for (int i = 0; i < 3; ++i)
+    {
+      result(i) = coeffs_(i, 0) + coeffs_(i, 1) * t + coeffs_(i, 2) * t * t +
+                  coeffs_(i, 3) * t * t * t + coeffs_(i, 4) * t * t * t * t +
+                  coeffs_(i, 5) * t * t * t * t * t;
+    }
+    return result;
+  }
+
+  Eigen::Vector3d sampleVel(double t)
+  {
+    Eigen::Vector3d result;
+    for (int i = 0; i < 3; ++i)
+    {
+      result(i) = coeffs_(i, 1) + 2 * coeffs_(i, 2) * t + 3 * coeffs_(i, 3) * t * t + 4 * coeffs_(i, 4) * t * t * t + 5 * coeffs_(i, 5) * t * t * t * t;
+    }
+    return result;
+  }
+
+  Eigen::Vector3d sampleAcc(double t)
+  {
+    Eigen::Vector3d result;
+    for (int i = 0; i < 3; ++i)
+    {
+      result(i) = 2 * coeffs_(i, 2) + 6 * coeffs_(i, 3) * t + 12 * coeffs_(i, 4) * t * t + 20 * coeffs_(i, 5) * t * t * t;
+    }
+    return result;
+  }
+
+  // private:
+  Eigen::Matrix<double, 3, 6> coeffs_;
+  double duration_;
+};
+
 /**
  * @brief 混合A*路径搜索
  * @ 结果是位置速度连续，加速度作为控制量不连续
@@ -182,6 +260,8 @@ public:
    */
   std::vector<Eigen::Vector3d> getKinoTraj(double delta_t);
 
+  void getSamples(double &ts, std::vector<Eigen::Vector3d> &point_set, std::vector<Eigen::Vector3d> &start_end_derivatives);
+
   /** @brief 获取混合A*搜索结果的动作序列     */
   std::vector<HybirdAstarPathNodePtr> getHybirdAstarPathNodes();
 
@@ -192,17 +272,7 @@ public:
   std::vector<Eigen::Vector3d> getAllMotions(double delta_t);
   std::vector<std::pair<Eigen::Matrix<double, 6, 1>, Eigen::Vector4d>> all_motions_;
 
-  void saveTrjToTxt(double delta_t, std::string filename);
-
-  // void parameterTraj(double start_time, double delta_t);
-  // void saveTrajToTxt(std::string filename);
-  // QuinticSpline trajectory_;
-
   typedef std::shared_ptr<HybirdAstar> Ptr;
-
-  // #ifdef MY_DEBUG
-  //     ros::Publisher paths_pub_;
-  // #endif
 
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
@@ -232,19 +302,19 @@ private:
   int allocate_num_;
   std::vector<HybirdAstarPathNodePtr> path_node_pool_; //  预先分配的节点
 
-  int use_node_num_;                               // = path_nodes_.size() + open_set_.size()
-  std::vector<HybirdAstarPathNodePtr> path_nodes_; // 记录结果的节点
+  Eigen::Vector3d start_vel_, end_vel_, start_acc_;
+
+  int use_node_num_; // = path_nodes_.size() + open_set_.size()
+
   std::priority_queue<HybirdAstarPathNodePtr, std::vector<HybirdAstarPathNodePtr>, NodeComparator> open_set_;
 
   NodeHashTable expanded_nodes_; // 记录所有遍历过的节点，为了查找节点时是否已经被遍历
 
   /* ---------- record data ---------- */
-  // Eigen::Vector3d start_vel_, end_vel_, start_acc_;
+  std::vector<HybirdAstarPathNodePtr> path_nodes_; // 记录结果的节点
+  PolyTraj shot_traj_;                             // 末端采用五次多项式
 
   bool is_shot_succ_ = false;
-  Eigen::MatrixXd coef_shot_;
-  double t_shot_;
-
   bool verbose_;
   int iter_num_;
 
@@ -252,16 +322,6 @@ private:
   Eigen::Vector3i PosToIndex(Eigen::Vector3d pt);
   int TimeToIndex(double time);
   void retrievePath(HybirdAstarPathNodePtr end_node, std::vector<HybirdAstarPathNodePtr> &path_nodes);
-
-  /**
-   * @brief 使用多项式 (a*t^3 + b*t^2 + v0*t + p0) 计算一段直线轨迹
-   * @param time_to_goal 表示该段轨迹的期望用时。
-   * @param coef_shot 表示该段轨迹的多项式系数。
-   * @param t_shot 表示该段轨迹的历时。
-   */
-  bool computeShotTraj(Eigen::VectorXd state1, Eigen::VectorXd state2, double time_to_goal, Eigen::MatrixXd &coef_shot, double &t_shot);
-
-  bool computeLineTraj(Eigen::VectorXd state1, Eigen::VectorXd state2, Eigen::MatrixXd &coef_shot, double &t_shot);
 
   /** @brief 基于庞特利亚金最小值原理的启发式函数
    * @cost J = \int u^2 dt + \rho T = -c1/(3*T^3) - c2/(2*T^2) - c3/T + w_time_*T;

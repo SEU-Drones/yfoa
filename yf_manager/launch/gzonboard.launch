@@ -14,7 +14,7 @@
         <param name="mission/waypoint0_x" value="35.0" />
         <param name="mission/waypoint0_y" value="0.0" />
         <param name="mission/waypoint0_z" value="0.0" />
-        <param name="mission/waypoint0_vm" value="3.0" />
+        <param name="mission/waypoint0_vm" value="5.0" />
         <param name="mission/waypoint0_am" value="2.0" />
 
         <param name="mission/waypoint1_x" value="20.0" />
@@ -46,7 +46,7 @@
         <!-- 地图的边界 -->
         <param name="fsm/planning_horizon" value='15.0'/>
         <!-- 到达终点附近，不再规划 -->
-        <param name="fsm/no_replan_thresh" value='3.0'/>
+        <param name="fsm/no_replan_thresh" value='5.0'/>
         <!-- 每段轨迹至少执行的距离 -->
         <param name="fsm/replan_thresh" value='2.0'/>
         <param name="fsm/collsion_check_dist" value='1.0'/>
