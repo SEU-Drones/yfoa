@@ -39,36 +39,31 @@ state MANAGER{
         GEN_NEW_TRAJ: get local target state
         GEN_NEW_TRAJ: call replan via sending start and target state
 
-        state EXEC_TRAJ: check if need replan and reach end
-        EXEC_TRAJ: send cmds
-
         state REPLAN_TRAJ: chose target
         REPLAN_TRAJ: get start state from trajectory
         REPLAN_TRAJ: set local target state
         REPLAN_TRAJ: call replan via sending start and target state
 
-        [*]-[#green,bold]-->GEN_NEW_TRAJ: no traj
-        [*]-[#blue,bold]-->EXEC_TRAJ: has traj
+        state EXEC_TRAJ: check if need replan and reach end
+        EXEC_TRAJ: send cmds
+
+        state WAIT_TRAJ: wait target
+        WAIT_TRAJ: if from GEN_NEW_TRAJ, send zero
+        WAIT_TRAJ: if from REPLAN_TRAJ, send cmds from planned trajectory
+
+        [*]-[#green,bold]-->GEN_NEW_TRAJ
         [*]-[#red,bold]-->REPLAN_TRAJ: collision
-        ' [*]-[#red,bold]-->[*]: arrived
 
+        GEN_NEW_TRAJ-[#green,bold]->WAIT_TRAJ
+        WAIT_TRAJ-[#green,bold]->GEN_NEW_TRAJ: plan failed
 
-
-        GEN_NEW_TRAJ-[#green,bold]->EXEC_TRAJ: receive traj
-        ' GEN_NEW_TRAJ-->GEN_NEW_TRAJ: plan failed
-        ' GEN_NEW_TRAJ-->WAIT_TARGET: handle target failed
-
-        ' EXEC_TRAJ-[#green,bold]->WAIT_TARGET:tajectory over
+        WAIT_TRAJ-[#green,bold]->EXEC_TRAJ: receive traj
         EXEC_TRAJ-[#green,bold]->REPLAN_TRAJ: over duration/distance
 
-        REPLAN_TRAJ-[#green,bold]->EXEC_TRAJ: receive traj
-        ' REPLAN_TRAJ-->GEN_NEW_TRAJ: plan failed
-        ' REPLAN_TRAJ-->WAIT_TARGET: handle target failed
+        REPLAN_TRAJ-[#green,bold]->WAIT_TRAJ
 
         EXEC_TRAJ-[#green,bold]->[*]: reach end
-
     }
-
 
     state FAULT: empty
 

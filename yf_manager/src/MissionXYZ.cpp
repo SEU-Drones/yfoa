@@ -32,6 +32,8 @@ void MissionXYZ::init(ros::NodeHandle node)
     node.param("mission/sendOneByOne", sendOneByOne_, true);
     node.param("mission/wps_threshold", wps_thr_, 2.0);
     node.param("mission/control_mode", control_mode_, 2);
+    node.param("fsm/no_replan_thresh", no_replan_thresh_, 1.0);
+    node.param("fsm/replan_thresh", replan_thresh_, 1.0);
     node.param<std::string>("mission/handle_wpts_xy", handle_wpts_xy_, "UseOffboardPoint");
     node.param<std::string>("mission/handle_wpts_z", handle_wpts_z_, "UseOffboardHeight");
 
@@ -41,7 +43,7 @@ void MissionXYZ::init(ros::NodeHandle node)
     odom_sub_ = node.subscribe("/odom", 10, &MissionXYZ::odomCallback, this);
     rviz_sub_ = node.subscribe("/move_base_simple/goal", 10, &MissionXYZ::rvizCallback, this);
     bspline_sub_ = node.subscribe("/planner/bspline", 1, &MissionXYZ::bsplineCallback, this);
-    planerflag_sub_ = node.subscribe("/planner/flag", 1, &MissionXYZ::planerFlagCallback, this);
+    planerflag_sub_ = node.subscribe("/planner/flag", 1, &MissionXYZ::planerResultCallback, this);
 
     // wps_pub_ = node.advertise<yf_manager::WayPoints>("/mission/waypoints", 10);
     setpoint_raw_local_pub_ = node.advertise<mavros_msgs::PositionTarget>("/mavros/setpoint_raw/local", 10);
@@ -89,8 +91,8 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
 
     if (uav_sysstate_.mode != "OFFBOARD") // check flight
     {
-        changeMissionState(mission_fsm_state_, MISSION_STATE::MANUALFLIGHT);
         // reset();
+        changeMissionState(mission_fsm_state_, MISSION_STATE::MANUALFLIGHT);
         return;
     }
 
@@ -100,7 +102,6 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
     {
         if (uav_sysstate_.armed == true && last_uav_sysstate_.armed == false)
         {
-            // setHome(odom_, home_);
             home_ = current_state_;
             changeMissionState(mission_fsm_state_, MISSION_STATE::MANUALFLIGHT);
         }
@@ -142,48 +143,56 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
 
     case MISSION_STATE::AUTOFLIGHT:
     {
-        if (!receive_traj_)
-        {
-            mission_auto_fsm_state_ = MISSION_AUTO_STATE::GEN_NEW_TRAJ;
-        }
-        else
-            mission_auto_fsm_state_ = MISSION_AUTO_STATE::EXEC_TRAJ;
-
-        if (collision_)
-            mission_auto_fsm_state_ = MISSION_AUTO_STATE::REPLAN_TRAJ;
-
         Eigen::Vector3d pos_sp, vel_sp, acc_sp;
         double yaw_sp;
         ros::Time time_now;
         static ros::Time time_last = ros::Time::now();
+        // if (!receive_traj_)
+        // {
+        //     mission_auto_fsm_state_ = MISSION_AUTO_STATE::GEN_NEW_TRAJ;
+        // }
+        // else
+        //     mission_auto_fsm_state_ = MISSION_AUTO_STATE::EXEC_TRAJ;
+
+        if (collision_)
+            mission_auto_fsm_state_ = MISSION_AUTO_STATE::REPLAN_TRAJ;
+
         switch (mission_auto_fsm_state_)
         {
         case MISSION_AUTO_STATE::GEN_NEW_TRAJ:
         {
-            // 判断有没有达到途径点
-            trajectory_.end_mavstate = choseTarget();
-
+            // do once and wait planning result
             trajectory_.start_time = current_state_.time;
-            publishSE(current_state_, trajectory_.end_mavstate);
+            trajectory_.start_mavstate = current_state_;
+            trajectory_.end_mavstate = choseTarget(); // 判断有没有达到途径点
+            publishSE(trajectory_.start_mavstate, trajectory_.end_mavstate);
+
             publishCmd(Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(), 0.0, ControlMode::VEL);
+            mission_auto_fsm_state_ = MISSION_AUTO_STATE::WAIT_TRAJ;
+
+            break;
         }
         case MISSION_AUTO_STATE::REPLAN_TRAJ:
         {
-            trajectory_.end_mavstate = choseTarget();
-
+            // do once and wait planning result
             time_now = ros::Time::now();
+            trajectory_.end_mavstate = choseTarget();
             double t_cur = (time_now - trajectory_.start_time).toSec();
             trajectory_.start_mavstate.pos = trajectory_.position_traj.evaluateDeBoorT(t_cur);
             trajectory_.start_mavstate.vel = trajectory_.velocity_traj.evaluateDeBoorT(t_cur);
             trajectory_.start_mavstate.acc = trajectory_.acceleration_traj.evaluateDeBoorT(t_cur);
             trajectory_.start_time = time_now;
-            publishSE(current_state_, trajectory_.end_mavstate);
+            publishSE(trajectory_.start_mavstate, trajectory_.end_mavstate);
 
             pos_sp = trajectory_.position_traj.evaluateDeBoorT(t_cur);
             vel_sp = trajectory_.velocity_traj.evaluateDeBoorT(t_cur);
             acc_sp = trajectory_.acceleration_traj.evaluateDeBoorT(t_cur);
             yaw_sp = calculate_yaw(t_cur, pos_sp_, time_now, time_last).first;
             publishCmd(pos_sp, vel_sp, acc_sp, yaw_sp, control_mode_);
+
+            mission_auto_fsm_state_ = MISSION_AUTO_STATE::WAIT_TRAJ;
+
+            break;
         }
         case MISSION_AUTO_STATE::EXEC_TRAJ:
         {
@@ -220,10 +229,18 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
 
             break;
         }
+
+        case MISSION_AUTO_STATE::REPLAN_TRAJ:
+        {
+
+            mission_auto_fsm_state_ = MISSION_AUTO_STATE::EXEC_TRAJ;
+
+            break;
         }
-        time_last = time_now;
+        }
     }
     }
+    time_last = time_now;
     last_uav_sysstate_ = uav_sysstate_;
 }
 
@@ -305,31 +322,22 @@ void MissionXYZ::bsplineCallback(yf_manager::BsplineConstPtr msg)
 
     // UniformBspline yaw_traj(yaw_pts, msg->order, msg->yaw_dt);
 
+    trajectory_.id = msg->traj_id;
+    trajectory_.start_time = msg->start_time;
+    trajectory_.duration = pos_traj.getTimeSum();
+
+    trajectory_.position_traj = pos_traj;
+    trajectory_.velocity_traj = pos_traj.getDerivative();
+    trajectory_.acceleration_traj = trajectory_.velocity_traj.getDerivative();
     start_time_ = msg->start_time;
-    traj_id_ = msg->traj_id;
-
-    traj_.clear();
-    traj_.push_back(pos_traj);
-    traj_.push_back(traj_[0].getDerivative());
-    traj_.push_back(traj_[1].getDerivative());
-
-    traj_duration_ = traj_[0].getTimeSum();
 
     receive_traj_ = true;
 }
 
-void MissionXYZ::planerFlagCallback(const std_msgs::Int16 &msg)
+void MissionXYZ::planerResultCallback(const std_msgs::Int16 &msg)
 {
-    if (msg.data == 2) // FsmState::GEN_NEW_TRAJ
+    if (msg.data == 2)
     {
-    }
-
-    if (msg.data == 3) // FsmState::REPLAN_TRAJ
-    {
-        // const double time_out = 0.001;
-        // ros::Time time_now = ros::Time::now();
-        // double t_stop = (time_now - start_time_).toSec() + time_out;
-        traj_duration_ = std::min((ros::Time::now() - start_time_).toSec() + 0.1, traj_duration_);
     }
 }
 

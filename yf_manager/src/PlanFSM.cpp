@@ -487,6 +487,15 @@ bool PlanFSM::getLocalTarget(MAVState &target, MAVState cur, MAVState end, doubl
 
 void PlanFSM::execFSMCallback(const ros::TimerEvent &e)
 {
+    // check ok
+
+    // if (have_target_)
+    // {
+    //     getLocalTarget();
+    //     callReplan();
+    //     have_target_ = false;
+    // }
+
     switch (plan_fsm_state_)
     {
     case FsmState::INIT:

@@ -50,12 +50,15 @@ struct MAVState
 
     double longitude; // 经度
     double latitude;  // 纬度
-};
-struct MAVLimits
-{
+
     double max_vel;
     double max_acc;
 };
+// struct MAVLimits
+// {
+//     double max_vel;
+//     double max_acc;
+// };
 
 struct MAVTraj
 {
@@ -68,10 +71,10 @@ struct MAVTraj
     MAVState start_mavstate, end_mavstate;
 
     int id;
-    double duration;
-    double global_time_offset; // This is because when the local traj finished and is going to switch back to the global traj, the global traj time is no longer matches the world time.
     ros::Time start_time;
+    double duration;
     UniformBspline position_traj, velocity_traj, acceleration_traj;
+    double global_time_offset; // This is because when the local traj finished and is going to switch back to the global traj, the global traj time is no longer matches the world time.
 };
 class MissionXYZ
 {
@@ -96,7 +99,8 @@ private:
     {
         GEN_NEW_TRAJ,
         EXEC_TRAJ,
-        REPLAN_TRAJ
+        REPLAN_TRAJ,
+        WAIT_TRAJ
     };
 
     mavros_msgs::State uav_sysstate_, last_uav_sysstate_;
@@ -135,7 +139,7 @@ private:
 
     void stateCallback(const mavros_msgs::State::ConstPtr &msg); // subscribe the mav flight mode
     void odomCallback(const nav_msgs::OdometryConstPtr &msg);    // subscribe the mav odom
-    void planerFlagCallback(const std_msgs::Int16 &msg);
+    void planerResultCallback(const std_msgs::Int16 &msg);
     void bsplineCallback(yf_manager::BsplineConstPtr msg);
     void rvizCallback(const geometry_msgs::PoseStampedConstPtr &msg);
 
