@@ -1,37 +1,96 @@
 @startuml
 hide empty description
-[*] -[#green,bold]-> INIT: initialization
-INIT : check odom
-INIT : check depth
 
-WAIT_TARGET : check if there are new targets
 
-GEN_NEW_TRAJ: get start state from current state
-GEN_NEW_TRAJ: set local target state
-GEN_NEW_TRAJ: call replan
+state MAPPING: update workspace
+MAPPING: collision check
+MAPPING-->MAPPING
 
-EXEC_TRAJ: calculate fly duration
+state PLANNING: wait call
+PLANNING: plan
+PLANNING: publish trajectory
+PLANNING-->PLANNING
 
-REPLAN_TRAJ: get start state from trajectory
-REPLAN_TRAJ: set local target state
-REPLAN_TRAJ: call replan
 
-INIT-[#green,bold]->WAIT_TARGET: check ok
+state MANAGER: check inputs right, otherwise return
+state MANAGER: do the following tasks
+state MANAGER: check armming state. if disarmming, clear and return
+state MANAGER: check flight mode. if non-OFFBOARD, clear and return
+state MANAGER: if enter OFFBOARD, preprocess waypoints once and global planninng
+state MANAGER: check if arriving  target
+state MANAGER: call plan
+state MANAGER: call replan
+state MANAGER: execute
 
-WAIT_TARGET-[#green,bold]->GEN_NEW_TRAJ: got target
+state MANAGER{
 
-GEN_NEW_TRAJ-[#green,bold]->EXEC_TRAJ: plan succeeded
-GEN_NEW_TRAJ-->GEN_NEW_TRAJ: plan failed
-GEN_NEW_TRAJ-->WAIT_TARGET: handle target failed
+    state READY: on land
+    READY: set home
 
-EXEC_TRAJ-[#green,bold]->WAIT_TARGET:tajectory over
-EXEC_TRAJ-[#green,bold]->REPLAN_TRAJ:flying distance is greater than setting value
+    state MANUALFLIGHT: flight under non-OFFBOARD
+    ' MANUALFLIGHT: if enter OFFBOARD, preprocess waypoints
 
-REPLAN_TRAJ-[#green,bold]->EXEC_TRAJ: plan succeeded
-REPLAN_TRAJ-->GEN_NEW_TRAJ: plan failed
-REPLAN_TRAJ-->WAIT_TARGET: handle target failed
+    state AUTOFLIGHT: if enter OFFBOARD, preprocess waypoints once and global planninng
+    AUTOFLIGHT: check if arriving  target
+    AUTOFLIGHT: send cmds
+    state AUTOFLIGHT{
+        state GEN_NEW_TRAJ: chose target
+        GEN_NEW_TRAJ: get start state from current state
+        GEN_NEW_TRAJ: get local target state
+        GEN_NEW_TRAJ: call replan via sending start and target state
 
-EMERGENCY_STOP: empty trajectory
+        state EXEC_TRAJ: check if need replan and reach end
+        EXEC_TRAJ: send cmds
 
-' (First usecase)-->EMERGENCY_STOP
+        state REPLAN_TRAJ: chose target
+        REPLAN_TRAJ: get start state from trajectory
+        REPLAN_TRAJ: set local target state
+        REPLAN_TRAJ: call replan via sending start and target state
+
+        [*]-[#green,bold]-->GEN_NEW_TRAJ: no traj
+        [*]-[#blue,bold]-->EXEC_TRAJ: has traj
+        [*]-[#red,bold]-->REPLAN_TRAJ: collision
+        ' [*]-[#red,bold]-->[*]: arrived
+
+
+
+        GEN_NEW_TRAJ-[#green,bold]->EXEC_TRAJ: receive traj
+        ' GEN_NEW_TRAJ-->GEN_NEW_TRAJ: plan failed
+        ' GEN_NEW_TRAJ-->WAIT_TARGET: handle target failed
+
+        ' EXEC_TRAJ-[#green,bold]->WAIT_TARGET:tajectory over
+        EXEC_TRAJ-[#green,bold]->REPLAN_TRAJ: over duration/distance
+
+        REPLAN_TRAJ-[#green,bold]->EXEC_TRAJ: receive traj
+        ' REPLAN_TRAJ-->GEN_NEW_TRAJ: plan failed
+        ' REPLAN_TRAJ-->WAIT_TARGET: handle target failed
+
+        EXEC_TRAJ-[#green,bold]->[*]: reach end
+
+    }
+
+
+    state FAULT: empty
+
+    ' [*] -[#green,bold]-> IDLE: initialization
+    [*]-->READY
+    READY --> MANUALFLIGHT: armming
+    MANUALFLIGHT-->READY: disarmming
+    ' MANUALFLIGHT --> MANUALFLIGHT
+    MANUALFLIGHT --> AUTOFLIGHT: OFFBOARD
+    AUTOFLIGHT --> MANUALFLIGHT: non-OFFBOARD
+    AUTOFLIGHT --> READY: disarmming
+
+}
+
+state fork_state <<fork>>
+[*]-->fork_state
+fork_state-[#green,bold]->MANAGER
+fork_state-[#green,bold]->MAPPING
+fork_state-[#green,bold]->PLANNING
+
+
+
+
+
 @enduml

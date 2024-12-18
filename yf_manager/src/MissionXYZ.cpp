@@ -3,7 +3,7 @@
  * @Author:       yong
  * @Date: 2022-10-19
  * @LastEditors: Please set LastEditors
- * @LastEditTime: 2024-12-10 15:09:18
+ * @LastEditTime: 2024-12-18 17:41:40
  * @Description:
  * @Subscriber:
  * @Publisher:
@@ -19,7 +19,7 @@ void MissionXYZ::init(ros::NodeHandle node)
     node.param("mission/waypoint_num", wps_num_, -1);
     for (int i = 0; i < wps_num_; i++)
     {
-        Point point;
+        MAVState point;
         node.param("mission/waypoint" + std::to_string(i) + "_x", point.pos[0], -1.0);
         node.param("mission/waypoint" + std::to_string(i) + "_y", point.pos[1], -1.0);
         node.param("mission/waypoint" + std::to_string(i) + "_z", point.pos[2], -1.0);
@@ -36,16 +36,14 @@ void MissionXYZ::init(ros::NodeHandle node)
     node.param<std::string>("mission/handle_wpts_z", handle_wpts_z_, "UseOffboardHeight");
 
     mission_fsm_timer_ = node.createTimer(ros::Duration(0.10), &MissionXYZ::missionCallback, this);
-    cmd_timer_ = node.createTimer(ros::Duration(0.05), &MissionXYZ::cmdCallback, this);
-    heart_timer_ = node.createTimer(ros::Duration(2.0), &MissionXYZ::heartCallback, this);
 
     state_sub_ = node.subscribe("/mavros/state", 10, &MissionXYZ::stateCallback, this);
-    odom_sub_ = node.subscribe("/odom", 10, &MissionXYZ::localOdomCallback, this);
+    odom_sub_ = node.subscribe("/odom", 10, &MissionXYZ::odomCallback, this);
     rviz_sub_ = node.subscribe("/move_base_simple/goal", 10, &MissionXYZ::rvizCallback, this);
     bspline_sub_ = node.subscribe("/planner/bspline", 1, &MissionXYZ::bsplineCallback, this);
     planerflag_sub_ = node.subscribe("/planner/flag", 1, &MissionXYZ::planerFlagCallback, this);
 
-    wps_pub_ = node.advertise<yf_manager::WayPoints>("/mission/waypoints", 10);
+    // wps_pub_ = node.advertise<yf_manager::WayPoints>("/mission/waypoints", 10);
     setpoint_raw_local_pub_ = node.advertise<mavros_msgs::PositionTarget>("/mavros/setpoint_raw/local", 10);
 
     poscmds_vis_pub_ = node.advertise<sensor_msgs::PointCloud2>("/mission/poscmds_vis", 10);
@@ -54,13 +52,11 @@ void MissionXYZ::init(ros::NodeHandle node)
     has_odom_ = false;
     sendflag_ = true;
     k_ = 0;
-    traj_id_ = 0;
 
     time_forward_ = 1.0;
     receive_traj_ = false;
-    cmd_heart_ = false;
 
-    changeMissionState(mission_fsm_state_, MISSION_STATE::IDLE);
+    changeMissionState(mission_fsm_state_, MISSION_STATE::READY);
 
     pos_cmds_.empty();
     pos_actual_.empty();
@@ -77,45 +73,45 @@ void MissionXYZ::init(ros::NodeHandle node)
 
 void MissionXYZ::missionCallback(const ros::TimerEvent &e)
 {
-    if (!has_odom_)
+
+    if (!has_odom_ && !has_depth_) // check inputs
     {
-        ROS_INFO("mission no odom!");
+        // reset();
+        return;
+    }
+
+    if (uav_sysstate_.armed == false) // check armming state
+    {
+        changeMissionState(mission_fsm_state_, MISSION_STATE::READY);
+        // reset();
+        return;
+    }
+
+    if (uav_sysstate_.mode != "OFFBOARD") // check flight
+    {
+        changeMissionState(mission_fsm_state_, MISSION_STATE::MANUALFLIGHT);
+        // reset();
         return;
     }
 
     switch (mission_fsm_state_)
     {
-    case MISSION_STATE::IDLE:
-    {
-        if (state_.armed == true)
-            changeMissionState(mission_fsm_state_, MISSION_STATE::READY);
-        break;
-    }
-
     case MISSION_STATE::READY:
     {
-        setHome(odom_, home_);
-        // handleWaypoints(wps_, home_);
-        ROS_WARN("[mission] Arimming!");
-        std::cout << "[mission]  the home position(x,y,z,yaw): " << home_.pos.transpose() << ", " << home_.yaw * 53.7 << std::endl;
-
-        changeMissionState(mission_fsm_state_, MISSION_STATE::TAKEOFF);
-
+        if (uav_sysstate_.armed == true && last_uav_sysstate_.armed == false)
+        {
+            // setHome(odom_, home_);
+            home_ = current_state_;
+            changeMissionState(mission_fsm_state_, MISSION_STATE::MANUALFLIGHT);
+        }
         break;
     }
 
-    case MISSION_STATE::TAKEOFF:
+    case MISSION_STATE::MANUALFLIGHT:
     {
-        k_ = 0;
-        sendflag_ = true;
-        pos_sp_(0) = odom_.pose.pose.position.x;
-        pos_sp_(1) = odom_.pose.pose.position.y;
-        pos_sp_(2) = odom_.pose.pose.position.z;
-        yaw_sp_ = quaternion_to_yaw(odom_.pose.pose.orientation);
-
-        if (state_.mode == "OFFBOARD")
+        if (uav_sysstate_.mode == "OFFBOARD" && last_uav_sysstate_.mode != "OFFBOARD")
         {
-            std::cout << "[mission]  the OFFBOARD position(x,y,z,yaw): " << pos_sp_.transpose() << ", " << yaw_sp_ * 53.7 << std::endl;
+            // std::cout << "[mission]  the OFFBOARD position(x,y,z,yaw): " << pos_sp_.transpose() << ", " << yaw_sp_ * 53.7 << std::endl;
 
             for (int i = 0; i < wps_.size(); i++)
             {
@@ -136,171 +132,146 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
                     wps_[i].pos[2] = odom_.pose.pose.position.z;
             }
 
-            changeMissionState(mission_fsm_state_, MISSION_STATE::MOVE);
+            changeMissionState(mission_fsm_state_, MISSION_STATE::AUTOFLIGHT);
         }
 
-        if (state_.armed == false)
-            changeMissionState(mission_fsm_state_, MISSION_STATE::IDLE);
+        publishCmd(Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(), 0.0, ControlMode::VEL);
 
         break;
     }
 
-    case MISSION_STATE::MOVE:
+    case MISSION_STATE::AUTOFLIGHT:
     {
-        if (sendOneByOne_)
+        if (!receive_traj_)
         {
-            if (sendflag_)
-            {
-                sendflag_ = false;
-                sendWayPoints(wps_, k_);
-            }
-
-            // 途径点判断
-            if (k_ < wps_.size() - 1)
-            {
-                if (sqrt(pow(odom_.pose.pose.position.x - wps_[k_].pos[0], 2) +
-                         pow(odom_.pose.pose.position.y - wps_[k_].pos[1], 2) +
-                         pow(odom_.pose.pose.position.z - wps_[k_].pos[2], 2)) < wps_thr_)
-                {
-                    k_++;
-                    sendflag_ = true;
-                }
-            }
+            mission_auto_fsm_state_ = MISSION_AUTO_STATE::GEN_NEW_TRAJ;
         }
         else
+            mission_auto_fsm_state_ = MISSION_AUTO_STATE::EXEC_TRAJ;
+
+        if (collision_)
+            mission_auto_fsm_state_ = MISSION_AUTO_STATE::REPLAN_TRAJ;
+
+        Eigen::Vector3d pos_sp, vel_sp, acc_sp;
+        double yaw_sp;
+        ros::Time time_now;
+        static ros::Time time_last = ros::Time::now();
+        switch (mission_auto_fsm_state_)
         {
-            if (sendflag_)
-            {
-                sendflag_ = false;
-                k_ = wps_.size();
-                sendWayPoints(wps_);
-            }
-        }
-
-        // 终点判断
-        if (k_ == wps_.size() - 1)
+        case MISSION_AUTO_STATE::GEN_NEW_TRAJ:
         {
-            if (sqrt(pow(odom_.pose.pose.position.x - wps_[k_ - 1].pos[0], 2) +
-                     pow(odom_.pose.pose.position.y - wps_[k_ - 1].pos[1], 2) +
-                     pow(odom_.pose.pose.position.z - wps_[k_ - 1].pos[2], 2)) < 1.0 &&
-                sqrt(pow(odom_.twist.twist.linear.x, 2) +
-                     pow(odom_.twist.twist.linear.y, 2) +
-                     pow(odom_.twist.twist.linear.z, 2)) < 0.1)
-            {
-                changeMissionState(mission_fsm_state_, MISSION_STATE::LAND);
-                sendflag_ = true;
-                k_ = 0;
-            }
+            // 判断有没有达到途径点
+            trajectory_.end_mavstate = choseTarget();
+
+            trajectory_.start_time = current_state_.time;
+            publishSE(current_state_, trajectory_.end_mavstate);
+            publishCmd(Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(), 0.0, ControlMode::VEL);
         }
+        case MISSION_AUTO_STATE::REPLAN_TRAJ:
+        {
+            trajectory_.end_mavstate = choseTarget();
 
-        if (state_.armed == false)
-            changeMissionState(mission_fsm_state_, MISSION_STATE::IDLE);
+            time_now = ros::Time::now();
+            double t_cur = (time_now - trajectory_.start_time).toSec();
+            trajectory_.start_mavstate.pos = trajectory_.position_traj.evaluateDeBoorT(t_cur);
+            trajectory_.start_mavstate.vel = trajectory_.velocity_traj.evaluateDeBoorT(t_cur);
+            trajectory_.start_mavstate.acc = trajectory_.acceleration_traj.evaluateDeBoorT(t_cur);
+            trajectory_.start_time = time_now;
+            publishSE(current_state_, trajectory_.end_mavstate);
 
-        if (state_.armed == true && state_.mode != "OFFBOARD")
-            changeMissionState(mission_fsm_state_, MISSION_STATE::TAKEOFF);
+            pos_sp = trajectory_.position_traj.evaluateDeBoorT(t_cur);
+            vel_sp = trajectory_.velocity_traj.evaluateDeBoorT(t_cur);
+            acc_sp = trajectory_.acceleration_traj.evaluateDeBoorT(t_cur);
+            yaw_sp = calculate_yaw(t_cur, pos_sp_, time_now, time_last).first;
+            publishCmd(pos_sp, vel_sp, acc_sp, yaw_sp, control_mode_);
+        }
+        case MISSION_AUTO_STATE::EXEC_TRAJ:
+        {
+            time_now = ros::Time::now();
 
-        break;
+            // 发送指令
+            double t_cur = (time_now - trajectory_.start_time).toSec();
+            t_cur = std::min(trajectory_.duration, t_cur);
+            if (t_cur > trajectory_.duration - 1e-2) // 轨迹结束
+            {
+                pos_sp = trajectory_.position_traj.evaluateDeBoorT(trajectory_.duration);
+                publishCmd(pos_sp, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(), 0.0, ControlMode::POS);
+                // changeFSMExecState(FsmState::WAIT_TARGET, "FSM");
+                // return;
+            }
+            else
+            {
+                pos_sp = trajectory_.position_traj.evaluateDeBoorT(t_cur);
+                vel_sp = trajectory_.velocity_traj.evaluateDeBoorT(t_cur);
+                acc_sp = trajectory_.acceleration_traj.evaluateDeBoorT(t_cur);
+                yaw_sp = calculate_yaw(t_cur, pos_sp_, time_now, time_last).first;
+                publishCmd(pos_sp, vel_sp, acc_sp, yaw_sp, control_mode_);
+            }
+
+            // 判断是否需要重规划
+            if ((trajectory_.end_mavstate.pos - pos_sp).norm() < no_replan_thresh_) // 到达终点附近，不再规划
+            {
+                // cout << "near end" << endl;
+            }
+            else if ((trajectory_.start_mavstate.pos - pos_sp).norm() > replan_thresh_) // 走过一段距离，需要重新规划
+            {
+                mission_auto_fsm_state_ = MISSION_AUTO_STATE::REPLAN_TRAJ;
+            }
+
+            break;
+        }
+        }
+        time_last = time_now;
     }
-
-    case MISSION_STATE::LAND:
-    {
-        if (state_.armed == false)
-            changeMissionState(mission_fsm_state_, MISSION_STATE::IDLE);
-        break;
     }
-
-    case MISSION_STATE::FAULT:
-    {
-        // 如果规划器挂掉等一切意外情况，进入错误处理（切换模式、悬停等）
-        break;
-    }
-    }
-
-    // if (state_.mode != "OFFBOARD" && state_.mode == "OFFBOARD")
-    //     changeMissionState(mission_fsm_state_, MISSION_STATE::TAKEOFF);
-
-    cmd_heart_ = true;
-    // if (cmd_heart_ != true)
-    //     changeMissionState(mission_fsm_state_, MISSION_STATE::FAULT);
-
-    // last_state_ = state_;
+    last_uav_sysstate_ = uav_sysstate_;
 }
 
-void MissionXYZ::setHome(nav_msgs::Odometry odom, Point &home)
-{
-    home.pos[0] = odom_.pose.pose.position.x;
-    home.pos[1] = odom_.pose.pose.position.y;
-    home.pos[2] = odom_.pose.pose.position.z;
+// void MissionXYZ::setHome(MAVState odom, MAVState &home)
+// {
+//     home.pos[0] = odom_.pose.pose.position.x;
+//     home.pos[1] = odom_.pose.pose.position.y;
+//     home.pos[2] = odom_.pose.pose.position.z;
 
-    home.yaw = quaternion_to_yaw(odom_.pose.pose.orientation);
-}
-
-void MissionXYZ::sendWayPoints(std::vector<Point> wayPoints, int k)
-{
-    yf_manager::WayPoints way_points;
-    way_points.header.stamp = ros::Time::now();
-    way_points.size = 1;
-
-    ROS_WARN("[mission] MOVE, send goal");
-
-    way_points.pos_x.push_back(wps_[k].pos[0]);
-    way_points.pos_y.push_back(wps_[k].pos[1]);
-    way_points.pos_z.push_back(wps_[k].pos[2]);
-    way_points.max_vel.push_back(wps_[k].max_vel);
-    way_points.max_acc.push_back(wps_[k].max_acc);
-
-    std::cout << "[mission] send the " << k << "th goal: "
-              << "   " << way_points.pos_x[0] << " " << way_points.pos_y[0] << " " << way_points.pos_z[0]
-              << "   The max vel and acc are:  " << way_points.max_vel[0] << " " << way_points.max_acc[0] << std::endl;
-
-    wps_pub_.publish(way_points);
-}
-
-void MissionXYZ::sendWayPoints(std::vector<Point> wayPoints)
-{
-    yf_manager::WayPoints way_points;
-    way_points.header.stamp = ros::Time::now();
-    way_points.size = wayPoints.size();
-
-    ROS_WARN("[mission] MOVE, send goal");
-    for (int k = 0; k < wayPoints.size(); k++)
-    {
-        way_points.pos_x.push_back(wps_[k].pos[0]);
-        way_points.pos_y.push_back(wps_[k].pos[1]);
-        way_points.pos_z.push_back(wps_[k].pos[2]);
-        way_points.max_vel.push_back(wps_[k].max_vel);
-        way_points.max_acc.push_back(wps_[k].max_acc);
-        std::cout << "[mission] The " << k << "th goal: "
-                  << "   " << way_points.pos_x[k] << " " << way_points.pos_y[k] << " " << way_points.pos_z[k]
-                  << "   The max vel and acc are:  " << way_points.max_vel[k] << " " << way_points.max_acc[k] << std::endl;
-    }
-
-    wps_pub_.publish(way_points);
-}
+//     home.yaw = quaternion_to_yaw(odom_.pose.pose.orientation);
+// }
 
 void MissionXYZ::changeMissionState(int &mode, int next)
 {
     mode = next;
     // std::cout << "[mission] mode " << next << std::endl;
-    static string state_str[7] = {"IDLE", "READY", "TAKEOFF", "MOVE", "LAND", "FAULT"};
-    std::cout << "\033[34m" << ros::Time::now() << "[mission] change mode to " << state_str[mode] << "\033[0m" << std::endl;
+    // static string state_str[7] = {"IDLE", "READY", "TAKEOFF", "MOVE", "LAND", "FAULT"};
+    // std::cout << "\033[34m" << ros::Time::now() << "[mission] change mode to " << state_str[mode] << "\033[0m" << std::endl;
 }
 
 void MissionXYZ::stateCallback(const mavros_msgs::State::ConstPtr &msg)
 {
-    state_ = *msg;
+    uav_sysstate_ = *msg;
 
-    if (state_.mode == "OFFBOARD" || state_.mode == "GUIDED" || state_.mode == "CMODE(4)")
-        state_.mode = "OFFBOARD";
-
-    // if (state_.armed == false)
-    //     changeMissionState(mission_fsm_state_, MISSION_STATE::IDLE);
+    if (uav_sysstate_.mode == "OFFBOARD" || uav_sysstate_.mode == "GUIDED" || uav_sysstate_.mode == "CMODE(4)")
+        uav_sysstate_.mode = "OFFBOARD";
 }
 
-void MissionXYZ::localOdomCallback(const nav_msgs::OdometryConstPtr &msg)
+void MissionXYZ::odomCallback(const nav_msgs::OdometryConstPtr &msg)
 {
+    current_state_.time = ros::Time::now();
+
+    current_state_.pos(0) = msg->pose.pose.position.x;
+    current_state_.pos(1) = msg->pose.pose.position.y;
+    current_state_.pos(2) = msg->pose.pose.position.z;
+
+    current_state_.vel(0) = msg->twist.twist.linear.x;
+    current_state_.vel(1) = msg->twist.twist.linear.y;
+    current_state_.vel(2) = msg->twist.twist.linear.z;
+
+    // odom_acc_ = estimateAcc( msg );
+
+    current_state_.quat.w() = msg->pose.pose.orientation.w;
+    current_state_.quat.x() = msg->pose.pose.orientation.x;
+    current_state_.quat.y() = msg->pose.pose.orientation.y;
+    current_state_.quat.z() = msg->pose.pose.orientation.z;
+
     has_odom_ = true;
-    odom_ = *msg;
 }
 
 void MissionXYZ::bsplineCallback(yf_manager::BsplineConstPtr msg)
@@ -390,7 +361,7 @@ std::pair<double, double> MissionXYZ::calculate_yaw(double t_cur, Eigen::Vector3
     double yaw = 0;
     double yawdot = 0;
 
-    Eigen::Vector3d dir = t_cur + time_forward_ <= traj_duration_ ? traj_[0].evaluateDeBoorT(t_cur + time_forward_) - pos : traj_[0].evaluateDeBoorT(traj_duration_) - pos;
+    Eigen::Vector3d dir = t_cur + time_forward_ <= trajectory_.duration ? trajectory_.position_traj.evaluateDeBoorT(t_cur + time_forward_) - pos : trajectory_.position_traj.evaluateDeBoorT(trajectory_.duration) - pos;
     double yaw_temp = dir.norm() > 0.1 ? atan2(dir(1), dir(0)) : last_yaw_;
     double max_yaw_change = YAW_DOT_MAX_PER_SEC * (time_now - time_last).toSec();
     if (yaw_temp - last_yaw_ > PI)
@@ -473,7 +444,7 @@ std::pair<double, double> MissionXYZ::calculate_yaw(double t_cur, Eigen::Vector3
     return yaw_yawdot;
 }
 
-void MissionXYZ::sendCmd(Eigen::Vector3d pos_sp, Eigen::Vector3d vel_sp, Eigen::Vector3d acc_sp, double yaw_sp, int cmode)
+void MissionXYZ::publishCmd(Eigen::Vector3d pos_sp, Eigen::Vector3d vel_sp, Eigen::Vector3d acc_sp, double yaw_sp, int cmode)
 {
     mavros_msgs::PositionTarget pos_setpoint;
 
@@ -508,86 +479,6 @@ void MissionXYZ::sendCmd(Eigen::Vector3d pos_sp, Eigen::Vector3d vel_sp, Eigen::
     pos_setpoint.yaw = yaw_sp;
 
     setpoint_raw_local_pub_.publish(pos_setpoint);
-}
-
-void MissionXYZ::cmdCallback(const ros::TimerEvent &e)
-{
-    if (!cmd_heart_) // 命令来源节点被杀死，强制退出
-        return;
-
-    if (!receive_traj_)
-    {
-        // 进入offboard但是还没有生成路径时，发送以下期望点
-        sendCmd(Eigen::Vector3d{0, 0, 0}, Eigen::Vector3d{0, 0, 0}, Eigen::Vector3d{0, 0, 0}, 0, ControlMode::VEL);
-    }
-    else
-    {
-        ros::Time time_now = ros::Time::now();
-        double t_cur = (time_now - start_time_).toSec();
-
-        // Eigen::Vector3d pos_f;
-        std::pair<double, double> yaw_yawdot(0, 0);
-
-        static ros::Time time_last = ros::Time::now();
-        if (t_cur < traj_duration_ && t_cur >= 0.0)
-        {
-            pos_sp_ = traj_[0].evaluateDeBoorT(t_cur);
-            vel_sp_ = traj_[1].evaluateDeBoorT(t_cur);
-            acc_sp_ = traj_[2].evaluateDeBoorT(t_cur);
-
-            /*** calculate yaw ***/
-            yaw_yawdot = calculate_yaw(t_cur, pos_sp_, time_now, time_last);
-            /*** calculate yaw ***/
-
-            // double tf = std::min(traj_duration_, t_cur + 2.0);
-            // pos_f = traj_[0].evaluateDeBoorT(tf);
-        }
-        else if (t_cur >= traj_duration_)
-        {
-            /* hover when finish traj_ */
-            pos_sp_ = traj_[0].evaluateDeBoorT(traj_duration_);
-            vel_sp_.setZero();
-            acc_sp_.setZero();
-
-            yaw_yawdot.first = last_yaw_;
-            yaw_yawdot.second = 0;
-
-            // pos_f = pos_sp_;
-        }
-        else
-        {
-            cout << "[Traj server]: invalid time." << endl;
-        }
-        time_last = time_now;
-
-        yaw_sp_ = yaw_yawdot.first;
-
-        sendCmd(pos_sp_, vel_sp_, acc_sp_, yaw_sp_, control_mode_);
-
-        // std::cout << traj_id_ << "    " << ros::Time::now().toSec() << " " << t_cur << " " << pos_sp_.transpose() << "  " << vel_sp_.transpose() << "  " << acc_sp_.transpose() << std::endl;
-        // std::cout << "[mission] " << yaw_sp_ << ", " << yaw_sp_ * 53.7 << std::endl;
-
-        pos_cmds_.push_back(pos_sp_);
-        publishPoints(pos_cmds_, poscmds_vis_pub_);
-        if (pos_cmds_.size() > 10000)
-            pos_cmds_.clear();
-
-        yf_mission_file_ << ros::Time::now() << "," << "real" << ","
-                         << odom_.pose.pose.position.x << "," << odom_.pose.pose.position.y << "," << odom_.pose.pose.position.z << "\n";
-        yf_mission_file_ << ros::Time::now() << "," << "desire" << ","
-                         << pos_sp_[0] << "," << pos_sp_[1] << "," << pos_sp_[2] << ","
-                         << vel_sp_[0] << "," << vel_sp_[1] << "," << vel_sp_[2] << ","
-                         << acc_sp_[0] << "," << acc_sp_[1] << "," << acc_sp_[2] << "\n";
-    }
-
-    // pos_actual_.push_back(Eigen::Vector3d{odom_.pose.pose.position.x, odom_.pose.pose.position.y, odom_.pose.pose.position.z});
-    // publishPoints(pos_actual_, posactual_vis_pub_);
-}
-
-void MissionXYZ::heartCallback(const ros::TimerEvent &e)
-{
-    static string state_str[7] = {"IDLE", "READY", "TAKEOFF", "MOVE", "LAND", "FAULT"};
-    std::cout << "\033[34m" << "[mission] mode " << state_str[mission_fsm_state_] << "\033[0m" << std::endl;
 }
 
 double MissionXYZ::quaternion_to_yaw(geometry_msgs::Quaternion &q)
