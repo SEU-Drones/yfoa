@@ -1,0 +1,37 @@
+@startuml
+hide empty description
+[*] -[#green,bold]-> INIT: initialization
+INIT : check odom
+INIT : check depth
+
+WAIT_TARGET : check if there are new targets
+
+GEN_NEW_TRAJ: get start state from current state
+GEN_NEW_TRAJ: set local target state
+GEN_NEW_TRAJ: call replan
+
+EXEC_TRAJ: calculate fly duration
+
+REPLAN_TRAJ: get start state from trajectory
+REPLAN_TRAJ: set local target state
+REPLAN_TRAJ: call replan
+
+INIT-[#green,bold]->WAIT_TARGET: check ok
+
+WAIT_TARGET-[#green,bold]->GEN_NEW_TRAJ: got target
+
+GEN_NEW_TRAJ-[#green,bold]->EXEC_TRAJ: plan succeeded
+GEN_NEW_TRAJ-->GEN_NEW_TRAJ: plan failed
+GEN_NEW_TRAJ-->WAIT_TARGET: handle target failed
+
+EXEC_TRAJ-[#green,bold]->WAIT_TARGET:tajectory over
+EXEC_TRAJ-[#green,bold]->REPLAN_TRAJ:flying distance is greater than setting value
+
+REPLAN_TRAJ-[#green,bold]->EXEC_TRAJ: plan succeeded
+REPLAN_TRAJ-->GEN_NEW_TRAJ: plan failed
+REPLAN_TRAJ-->WAIT_TARGET: handle target failed
+
+EMERGENCY_STOP: empty trajectory
+
+' (First usecase)-->EMERGENCY_STOP
+@enduml
