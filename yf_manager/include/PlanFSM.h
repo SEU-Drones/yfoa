@@ -15,7 +15,7 @@
 #include <message_filters/sync_policies/approximate_time.h>
 #include <message_filters/sync_policies/exact_time.h>
 #include <message_filters/time_synchronizer.h>
-#include <std_msgs/Int16.h>
+#include <std_msgs/Bool.h>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
 #include <sensor_msgs/Image.h>
@@ -74,11 +74,21 @@ struct cameraData
 
 struct MAVState
 {
+    ros::Time time;
     Eigen::Vector3d pos;
     Eigen::Vector3d vel;
     Eigen::Vector3d acc;
 
     Eigen::Quaterniond quat;
+
+    double yaw;
+    double yaw_dot;
+
+    double longitude; // 经度
+    double latitude;  // 纬度
+
+    double max_vel;
+    double max_acc;
 };
 
 struct MAVTraj
@@ -109,42 +119,37 @@ private:
     double planning_horizon_;
 
     MAVTraj trajectory_;
+    MAVState end_mavstate_;
 
-    ros::Timer fsm_timer_, map_timer_, heart_timer_;
-    ros::Publisher planerflag_pub_, bspline_pub_;
+    ros::Timer planning_timer_, mapping_timer_;
+    ros::Publisher planerflag_pub_, collisionflag_pub_, bspline_pub_;
     typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, nav_msgs::Odometry>
         SyncPolicyImageOdom;
     typedef std::shared_ptr<message_filters::Synchronizer<SyncPolicyImageOdom>> SynchronizerImageOdom;
     SynchronizerImageOdom sync_image_odom_;
     std::shared_ptr<message_filters::Subscriber<sensor_msgs::Image>> depth_sub_;
     std::shared_ptr<message_filters::Subscriber<nav_msgs::Odometry>> odom_sub_;
-
-    ros::Subscriber waypoints_sub_, odometry_sub_, state_sub_;
+    ros::Subscriber waypoints_sub_;
 
     cameraData camData_;
-
-    MAVState current_mavstate_, target_mavstate_;
 
     void setCameraParam(std::string filename);
     void depthOdomCallback(const sensor_msgs::ImageConstPtr &img, const nav_msgs::OdometryConstPtr &odom);
     void updateMapCallback(const ros::TimerEvent &);
 
-    void stateCallback(const mavros_msgs::State::ConstPtr &msg); // subscribe the mav flight mode
     void odometryCallback(const nav_msgs::OdometryConstPtr &msg);
     void waypointsCallback(const yf_manager::WayPointsConstPtr &msg);
 
     bool collisionCheck(double delta, double min_distance);
 
-    double no_replan_thresh_, replan_thresh_, collsion_check_dist_;
-    FsmState plan_fsm_state_;
+    double collsion_check_dist_;
     bool callReplan(MAVState start, MAVState end, bool init);
-    void changeFSMExecState(FsmState new_state, string pos_call);
-    bool getLocalTarget(MAVState &target, MAVState cur, MAVState end, double length);
-    void execFSMCallback(const ros::TimerEvent &e);
-    void heartCallback(const ros::TimerEvent &e);
+    bool getLocalTarget(MAVState &target, MAVState start, MAVState end, double length);
+    void execPlanningCallback(const ros::TimerEvent &e);
 
     bool have_odom_;
     bool have_target_;
+    bool plannerflag_;
 
     double mapping_time_;
 

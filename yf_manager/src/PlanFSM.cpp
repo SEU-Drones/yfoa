@@ -16,16 +16,13 @@ void PlanFSM::init(std::string filename, ros::NodeHandle &nh)
         SyncPolicyImageOdom(100), *depth_sub_, *odom_sub_));
     sync_image_odom_->registerCallback(boost::bind(&PlanFSM::depthOdomCallback, this, _1, _2));
 
-    odometry_sub_ = nh.subscribe("/odom", 1, &PlanFSM::odometryCallback, this);
     waypoints_sub_ = nh.subscribe("/mission/waypoints", 1, &PlanFSM::waypointsCallback, this);
-    state_sub_ = nh.subscribe("/mavros/state", 10, &PlanFSM::stateCallback, this);
 
-    bspline_pub_ = nh.advertise<yf_manager::Bspline>("/planner/bspline", 1);
-
-    map_timer_ = nh.createTimer(ros::Duration(0.05), &PlanFSM::updateMapCallback, this);
-    fsm_timer_ = nh.createTimer(ros::Duration(0.01), &PlanFSM::execFSMCallback, this);
-    heart_timer_ = nh.createTimer(ros::Duration(2.0), &PlanFSM::heartCallback, this);
-    planerflag_pub_ = nh.advertise<std_msgs::Int16>("/planner/flag", 10);
+    mapping_timer_ = nh.createTimer(ros::Duration(0.05), &PlanFSM::updateMapCallback, this);
+    planning_timer_ = nh.createTimer(ros::Duration(0.01), &PlanFSM::execPlanningCallback, this);
+    planerflag_pub_ = nh.advertise<std_msgs::Bool>("/planner/result/flag", 10);
+    bspline_pub_ = nh.advertise<yf_manager::Bspline>("/planner/result/bspline", 1);
+    collisionflag_pub_ = nh.advertise<std_msgs::Bool>("/planner/collision/flag", 10);
 
     new_occ_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/map/new_occ", 10);
     new_free_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/map/new_free", 10);
@@ -40,8 +37,6 @@ void PlanFSM::init(std::string filename, ros::NodeHandle &nh)
 
     nh.param("fsm/control_point_distance", ctrl_pt_dist_, 0.4);
     nh.param("fsm/planning_horizon", planning_horizon_, 5.0);
-    nh.param("fsm/no_replan_thresh", no_replan_thresh_, 1.0);
-    nh.param("fsm/replan_thresh", replan_thresh_, 1.0);
     nh.param("fsm/collsion_check_dist", collsion_check_dist_, 1.0);
 
     // 初始化环境
@@ -58,8 +53,7 @@ void PlanFSM::init(std::string filename, ros::NodeHandle &nh)
     pathnlopt_ptr_->init(filename, workspace_ptr_, true);
 
     camData_.has_depth = false;
-    plan_fsm_state_ = FsmState::INIT;
-    have_odom_ = false;
+    // have_odom_ = false;
     have_target_ = false;
 
     trajectory_.traj_id_ = 0;
@@ -230,12 +224,14 @@ void PlanFSM::updateMapCallback(const ros::TimerEvent &)
     publishNewFree();
 
     // if (collisionCheck(0.1, collsion_check_dist_) && plan_fsm_state_ == FsmState::EXEC_TRAJ)
-    if (have_target_)
+    if (plannerflag_)
     {
         if (collisionCheck(0.1, collsion_check_dist_))
         {
             std::cout << "\033[31m" << "Danger! The Current trajectory touchs obstacles" << "\033[0m" << std::endl;
-            changeFSMExecState(FsmState::REPLAN_TRAJ, "FSM");
+            std_msgs::Bool msg;
+            msg.data = true;
+            collisionflag_pub_.publish(msg);
         }
     }
 
@@ -373,68 +369,29 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     return true;
 }
 
-void PlanFSM::stateCallback(const mavros_msgs::State::ConstPtr &msg)
-{
-    // if (msg->mode == "OFFBOARD" || msg->mode == "GUIDED" || msg->mode == "CMODE(4)")
-    //     changeFSMExecState(FsmState::WAIT_TARGET, "FSM");
-
-    // if (msg->mode != "OFFBOARD" && plan_fsm_state_ != FsmState::WAIT_TARGET)
-    // {
-    //     have_target_ = false;
-    //     have_odom_ = false;
-    //     changeFSMExecState(FsmState::WAIT_TARGET, "FSM");
-    // }
-    // state_.mode = "OFFBOARD";
-}
-
-void PlanFSM::odometryCallback(const nav_msgs::OdometryConstPtr &msg)
-{
-    current_mavstate_.pos(0) = msg->pose.pose.position.x;
-    current_mavstate_.pos(1) = msg->pose.pose.position.y;
-    current_mavstate_.pos(2) = msg->pose.pose.position.z;
-
-    current_mavstate_.vel(0) = msg->twist.twist.linear.x;
-    current_mavstate_.vel(1) = msg->twist.twist.linear.y;
-    current_mavstate_.vel(2) = msg->twist.twist.linear.z;
-
-    // odom_acc_ = estimateAcc( msg );
-
-    current_mavstate_.quat.w() = msg->pose.pose.orientation.w;
-    current_mavstate_.quat.x() = msg->pose.pose.orientation.x;
-    current_mavstate_.quat.y() = msg->pose.pose.orientation.y;
-    current_mavstate_.quat.z() = msg->pose.pose.orientation.z;
-
-    have_odom_ = true;
-}
-
 void PlanFSM::waypointsCallback(const yf_manager::WayPointsConstPtr &msg)
 {
-    target_mavstate_.pos << msg->pos_x[0], msg->pos_y[0], msg->pos_z[0];
-    target_mavstate_.vel.setZero();
-    target_mavstate_.acc.setZero();
+    trajectory_.start_mavstate.pos << msg->pos_x[0], msg->pos_y[0], msg->pos_z[0];
+    trajectory_.start_mavstate.vel << msg->vel_x[0], msg->vel_y[0], msg->vel_z[0];
+    trajectory_.start_mavstate.acc << msg->acc_x[0], msg->acc_y[0], msg->acc_z[0];
+    trajectory_.start_mavstate.max_vel = msg->max_vel[0];
+    trajectory_.start_mavstate.max_acc = msg->max_acc[0];
 
-    trajectory_.max_vel = msg->max_vel[0];
-    trajectory_.max_acc = msg->max_acc[0];
+    end_mavstate_.pos << msg->pos_x[1], msg->pos_y[1], msg->pos_z[1];
+    end_mavstate_.vel << msg->vel_x[1], msg->vel_y[1], msg->vel_z[1];
+    end_mavstate_.acc << msg->acc_x[1], msg->acc_y[1], msg->acc_z[1];
+    end_mavstate_.max_vel = msg->max_vel[1];
+    end_mavstate_.max_acc = msg->max_acc[1];
+
+    trajectory_.max_vel = msg->max_vel[1];
+    trajectory_.max_acc = msg->max_acc[1];
+
     have_target_ = true;
 }
 
-void PlanFSM::changeFSMExecState(FsmState new_state, string pos_call)
+bool PlanFSM::getLocalTarget(MAVState &target, MAVState start, MAVState end, double length)
 {
-
-    // if (new_state == exec_state_)
-    //   continously_called_times_++;
-    // else
-    //   continously_called_times_ = 1;
-
-    static string state_str[7] = {"INIT", "WAIT_TARGET", "GEN_NEW_TRAJ", "REPLAN_TRAJ", "EXEC_TRAJ", "EMERGENCY_STOP"};
-    int pre_s = int(plan_fsm_state_);
-    plan_fsm_state_ = new_state;
-    std::cout << "\033[33m" << ros::Time::now() << "[" + pos_call + "]: from " + state_str[pre_s] + " to " + state_str[int(new_state)] << "\033[0m" << std::endl;
-}
-
-bool PlanFSM::getLocalTarget(MAVState &target, MAVState cur, MAVState end, double length)
-{
-    double distance = (end.pos - cur.pos).norm();
+    double distance = (end.pos - start.pos).norm();
     if (distance <= workspace_ptr_->getResolution() || distance < hybirdastar_ptr_->getResolution())
     {
         std::cout << "\033[31m" << "----------The start and target are too close! " << distance << " ------------" << "\033[0m" << std::endl;
@@ -446,37 +403,36 @@ bool PlanFSM::getLocalTarget(MAVState &target, MAVState cur, MAVState end, doubl
     }
     else
     {
-        target.pos = cur.pos + (end.pos - cur.pos) * (length / distance);
+        target.pos = start.pos + (end.pos - start.pos) * (length / distance);
         target.vel.setZero();
         target.acc.setZero();
     }
 
-    if (workspace_ptr_->getDist(cur.pos) < collsion_check_dist_)
+    if (workspace_ptr_->getDist(start.pos) < collsion_check_dist_)
     {
-        std::cout << "\033[31m" << "----------The start (" << cur.pos.transpose() << ")  are in obstances! " << workspace_ptr_->getDist(cur.pos) << " ------------" << "\033[0m" << std::endl;
+        std::cout << "\033[31m" << "----------The start (" << start.pos.transpose() << ")  are in obstances! " << workspace_ptr_->getDist(start.pos) << " ------------" << "\033[0m" << std::endl;
         return false;
     }
 
     // 调整目标点的位置
     if (workspace_ptr_->getDist(target.pos) < hybirdastar_ptr_->getMinDistance())
     {
-        bool change;
-        double range = std::min(no_replan_thresh_, workspace_ptr_->getMaxDist()) - 0.1;
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        for (int i = 0; i < 100; i++)
-        {
-            std::uniform_real_distribution<> dis(-range, range);
-            double x = target.pos[0] + dis(gen);
-            double y = target.pos[1] + dis(gen);
-            double z = target.pos[2] + dis(gen);
-            if (workspace_ptr_->getDist(Eigen::Vector3d(x, y, z)) > hybirdastar_ptr_->getMinDistance())
-            {
-                std::cout << "\033[31m" << "----------The  target (" << target.pos.transpose() << ") are in obstances, and change to " << Eigen::Vector3d(x, y, z).transpose() << " ------------" << "\033[0m" << std::endl;
-                target.pos = Eigen::Vector3d(x, y, z); // 没有改变成功， todo...
-                return true;
-            }
-        }
+        // double range = std::min(collsion_check_dist_ + 0.1, workspace_ptr_->getMaxDist()) - 0.1;
+        // std::random_device rd;
+        // std::mt19937 gen(rd());
+        // for (int i = 0; i < 100; i++)
+        // {
+        //     std::uniform_real_distribution<> dis(-range, range);
+        //     double x = target.pos[0] + dis(gen);
+        //     double y = target.pos[1] + dis(gen);
+        //     double z = target.pos[2];
+        //     if (workspace_ptr_->getDist(Eigen::Vector3d(x, y, z)) > hybirdastar_ptr_->getMinDistance())
+        //     {
+        //         std::cout << "\033[31m" << "----------The  target (" << target.pos.transpose() << ") are in obstances, and change to " << Eigen::Vector3d(x, y, z).transpose() << " ------------" << "\033[0m" << std::endl;
+        //         target.pos = Eigen::Vector3d(x, y, z);
+        //         return true;
+        //     }
+        // }
 
         std::cout << "\033[31m" << "----------The  target (" << target.pos.transpose() << ") are in obstances!  The distance is " << workspace_ptr_->getDist(target.pos) << " ------------" << "\033[0m" << std::endl;
         std::cout << "\033[31m" << "---------- Abort!!! ------------" << "\033[0m" << std::endl;
@@ -485,159 +441,38 @@ bool PlanFSM::getLocalTarget(MAVState &target, MAVState cur, MAVState end, doubl
     return true;
 }
 
-void PlanFSM::execFSMCallback(const ros::TimerEvent &e)
+void PlanFSM::execPlanningCallback(const ros::TimerEvent &e)
 {
-    // check ok
-
-    // if (have_target_)
-    // {
-    //     getLocalTarget();
-    //     callReplan();
-    //     have_target_ = false;
-    // }
-
-    switch (plan_fsm_state_)
+    if (!have_target_)
     {
-    case FsmState::INIT:
+        return;
+    }
+
+    if (!getLocalTarget(trajectory_.end_mavstate, trajectory_.start_mavstate, end_mavstate_, planning_horizon_))
     {
-        if (!have_odom_)
-            return;
-
-        changeFSMExecState(FsmState::WAIT_TARGET, "FSM");
-        break;
+        plannerflag_ = false;
+        std::cout << "\033[32m" << "----------result: " << plannerflag_ << "    start and end states are wrong ------------" << "\033[0m" << std::endl;
     }
-    case FsmState::WAIT_TARGET:
+
+    std::chrono::system_clock::time_point t1, t2;
+    t1 = std::chrono::system_clock::now();
+    plannerflag_ = callReplan(trajectory_.start_mavstate, trajectory_.end_mavstate, true);
+    t2 = std::chrono::system_clock::now();
+
+    if (plannerflag_)
     {
-        if (!have_target_)
-            return;
-        else
-        {
-            changeFSMExecState(FsmState::GEN_NEW_TRAJ, "FSM");
-        }
-        break;
+        std::cout << "\033[32m" << "----------result: " << plannerflag_ << "    duration: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms ------------" << "\033[0m" << std::endl;
     }
-    case FsmState::GEN_NEW_TRAJ:
+    else
     {
-        trajectory_.start_mavstate.pos = current_mavstate_.pos;
-        trajectory_.start_mavstate.vel = current_mavstate_.vel;
-        trajectory_.start_mavstate.acc = Eigen::Vector3d::Zero();
-        trajectory_.start_time_ = ros::Time::now();
-
-        std_msgs::Int16 planer_flag;
-        planer_flag.data = FsmState::GEN_NEW_TRAJ;
-        planerflag_pub_.publish(planer_flag);
-
-        if (!getLocalTarget(trajectory_.end_mavstate, trajectory_.start_mavstate, target_mavstate_, planning_horizon_))
-        {
-            have_target_ = false;
-            changeFSMExecState(FsmState::WAIT_TARGET, "FSM");
-            // std::cout << have_target_ << std::endl;
-            return;
-        }
-
-        std::chrono::system_clock::time_point t1, t2;
-        t1 = std::chrono::system_clock::now();
-        bool success = callReplan(trajectory_.start_mavstate, trajectory_.end_mavstate, false);
-        t2 = std::chrono::system_clock::now();
-
-        if (success)
-        {
-            std::cout << "\033[32m" << "----------result: " << success << "    duration: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms ------------" << "\033[0m" << std::endl;
-            changeFSMExecState(FsmState::EXEC_TRAJ, "FSM");
-        }
-        else
-        {
-            std::cout << "\033[31m" << "----------result: " << success << "    duration: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms ------------" << "\033[0m" << std::endl;
-            changeFSMExecState(FsmState::GEN_NEW_TRAJ, "FSM");
-        }
-        break;
+        std::cout << "\033[31m" << "----------result: " << plannerflag_ << "    duration: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms ------------" << "\033[0m" << std::endl;
     }
-    case FsmState::EXEC_TRAJ:
-    {
-        ros::Time time_now = ros::Time::now();
 
-        double t_cur = (time_now - trajectory_.start_time_).toSec();
-        t_cur = std::min(trajectory_.duration_, t_cur);
+    have_target_ = false;
 
-        Eigen::Vector3d pos = trajectory_.position_traj_.evaluateDeBoorT(t_cur);
-
-        if (t_cur > trajectory_.duration_ - 1e-2) // 轨迹结束
-        {
-            have_target_ = false;
-            changeFSMExecState(FsmState::WAIT_TARGET, "FSM");
-            return;
-        }
-        else if ((target_mavstate_.pos - pos).norm() < no_replan_thresh_) // 到达终点附近，不再规划
-        {
-            // cout << "near end" << endl;
-            return;
-        }
-        else if ((trajectory_.start_mavstate.pos - pos).norm() < replan_thresh_)
-        {
-            // cout << "near start" << endl;
-            return;
-        }
-        else
-        {
-            changeFSMExecState(FsmState::REPLAN_TRAJ, "FSM");
-        }
-        break;
-    }
-    case FsmState::REPLAN_TRAJ:
-    {
-        // 获取当前期望的目标点
-        ros::Time time_now = ros::Time::now();
-        double t_cur = (time_now - trajectory_.start_time_).toSec();
-
-        trajectory_.start_mavstate.pos = trajectory_.position_traj_.evaluateDeBoorT(t_cur);
-        trajectory_.start_mavstate.vel = trajectory_.velocity_traj_.evaluateDeBoorT(t_cur);
-        trajectory_.start_mavstate.acc = trajectory_.acceleration_traj_.evaluateDeBoorT(t_cur);
-        trajectory_.start_time_ = time_now;
-
-        std_msgs::Int16 planer_flag;
-        planer_flag.data = FsmState::REPLAN_TRAJ;
-        planerflag_pub_.publish(planer_flag);
-
-        if (!getLocalTarget(trajectory_.end_mavstate, trajectory_.start_mavstate, target_mavstate_, planning_horizon_))
-        {
-            have_target_ = false;
-            changeFSMExecState(FsmState::WAIT_TARGET, "FSM");
-            break;
-        }
-
-        std::chrono::system_clock::time_point t1, t2;
-        t1 = std::chrono::system_clock::now();
-        bool success = callReplan(trajectory_.start_mavstate, trajectory_.end_mavstate, true);
-        t2 = std::chrono::system_clock::now();
-
-        if (success)
-        {
-            std::cout << "\033[32m" << "----------result: " << success << "    duration: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms ------------" << "\033[0m" << std::endl;
-            changeFSMExecState(FsmState::EXEC_TRAJ, "FSM");
-        }
-        else
-        {
-            std::cout << "\033[31m" << "----------result: " << success << "    duration: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms ------------" << "\033[0m" << std::endl;
-            changeFSMExecState(FsmState::GEN_NEW_TRAJ, "FSM");
-        }
-
-        break;
-
-        std::vector<Eigen::Vector3d> points;
-        points.push_back(trajectory_.end_mavstate.pos);
-        publishPoints(points, pts_pub_);
-    }
-    case FsmState::EMERGENCY_STOP:
-    {
-        break;
-    }
-    }
-}
-
-void PlanFSM::heartCallback(const ros::TimerEvent &e)
-{
-    static string state_str[7] = {"INIT", "WAIT_TARGET", "GEN_NEW_TRAJ", "REPLAN_TRAJ", "EXEC_TRAJ", "EMERGENCY_STOP"};
-    std::cout << "\033[33m" << ros::Time::now() << "[planner] mode " + state_str[int(plan_fsm_state_)] << "    have target: " << have_target_ << "\033[0m" << std::endl;
+    std_msgs::Bool msg;
+    msg.data = plannerflag_;
+    planerflag_pub_.publish(msg);
 }
 
 // 可视化

@@ -2,12 +2,13 @@
 <launch>
     <node pkg="yf_manager" name="MissionXYZ_node" type="MissionXYZ_node" output="screen">
         <remap from="/odom" to="/mavros/local_position/odom"/>
-        <param name="mission/sendOneByOne" value="true" />
         <param name="mission/wps_threshold" value="2.0" />
         <param name="mission/control_mode" value="3" />
         <param name="mission/handle_wpts_xy" value="UseOffboardPoint" />
         <param name="mission/handle_wpts_z" value="UseOffboardHeight" />
         <param name="mission/yf_mission_log_filename" value="$(find yf_manager)/yf_mission.txt" />
+        <param name="mission/no_replan_thresh" value='2.0'/>
+        <param name="mission/replan_thresh" value='2.0'/>
 
         <param name="mission/waypoint_num" value="1" />
 
@@ -45,10 +46,6 @@
         <param name="fsm/control_point_distance" value='0.4'/>
         <!-- 地图的边界 -->
         <param name="fsm/planning_horizon" value='15.0'/>
-        <!-- 到达终点附近，不再规划 -->
-        <param name="fsm/no_replan_thresh" value='2.0'/>
-        <!-- 每段轨迹至少执行的距离 -->
-        <param name="fsm/replan_thresh" value='2.0'/>
         <param name="fsm/collsion_check_dist" value='1.0'/>
     </node>
 

@@ -29,7 +29,7 @@
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <sensor_msgs/PointCloud2.h>
-#include <std_msgs/Int16.h>
+#include <std_msgs/Bool.h>
 
 #include "yf_manager/WayPoints.h"
 #include "yf_manager/Bspline.h"
@@ -76,9 +76,24 @@ struct MAVTraj
     UniformBspline position_traj, velocity_traj, acceleration_traj;
     double global_time_offset; // This is because when the local traj finished and is going to switch back to the global traj, the global traj time is no longer matches the world time.
 };
+
 class MissionXYZ
 {
 private:
+    std::vector<MAVState> wps_; // 途径点
+    int wps_num_;
+    int wps_index_;
+    double wps_thr_; // 判断到达途径点阈值
+    std::string handle_wpts_xy_, handle_wpts_z_;
+
+    MAVTraj trajectory_; // 规划的轨迹
+    bool receive_traj_;
+    double time_forward_;
+
+    double no_replan_thresh_; // 距离终点低于阈值,不再规划
+    double replan_thresh_;    // 每段轨迹执行的距离
+
+    int control_mode_; // 控制方法
     enum ControlMode
     {
         POS = 0,
@@ -87,6 +102,16 @@ private:
         POSVELACCYAW = 3,
         VEL
     };
+
+    mavros_msgs::State uav_sysstate_, last_uav_sysstate_;
+    MAVState home_; // home位置
+    MAVState current_state_, end_state_;
+
+    bool have_odom_, have_depth_;
+
+    bool plannerflag_;
+    bool collision_; // 碰撞检测标志
+
     int mission_fsm_state_; // 控制状态切换
     enum MISSION_STATE
     {
@@ -94,6 +119,7 @@ private:
         MANUALFLIGHT,
         AUTOFLIGHT,
     };
+
     int mission_auto_fsm_state_; // 控制状态切换
     enum MISSION_AUTO_STATE
     {
@@ -103,60 +129,34 @@ private:
         WAIT_TRAJ
     };
 
-    mavros_msgs::State uav_sysstate_, last_uav_sysstate_;
-    // nav_msgs::Odometry odom_;
-
-    std::vector<MAVState> wps_; // 途径点
-    int wps_num_;
-
-    MAVState home_; // home位置
-    MAVState current_state_, end_state_;
-
-    int control_mode_; // 规划轨迹
-    bool receive_traj_;
-    MAVTraj trajectory_;
-
-    double time_forward_;
-
-    double wps_thr_; // 判断到达途径点阈值
-    std::string handle_wpts_xy_, handle_wpts_z_;
-
-    double no_replan_thresh_, replan_thresh_;
-
-    bool sendOneByOne_;
-    bool sendflag_;
-    int k_;
-    std::ofstream yf_mission_file_;
-
-    bool has_odom_, has_depth_;
-    bool collision_;
-
     ros::Timer mission_fsm_timer_;
-    void changeMissionState(int &mode, int next);
-    // void setHome(nav_msgs::Odometry odom, MAVState &home);
-    void publishCmd(Eigen::Vector3d pos_sp, Eigen::Vector3d vel_sp, Eigen::Vector3d acc_sp, double yaw_sp, int cmode);
     void missionCallback(const ros::TimerEvent &e); // Timer for workflow control, send WayPoints
+    void changeMissionState(int &mode, int next);
+    void changeMissionAutoState(int &mode, int next);
+    MAVState choseTarget(); // 根据当前位置从途径点向量中选择合适的途径点作为目标点
+    void publishCmd(Eigen::Vector3d pos_sp, Eigen::Vector3d vel_sp, Eigen::Vector3d acc_sp, double yaw_sp, int cmode);
+    void publishSE(MAVState start, MAVState end);
+    void reset();
 
     void stateCallback(const mavros_msgs::State::ConstPtr &msg); // subscribe the mav flight mode
     void odomCallback(const nav_msgs::OdometryConstPtr &msg);    // subscribe the mav odom
-    void planerResultCallback(const std_msgs::Int16 &msg);
     void bsplineCallback(yf_manager::BsplineConstPtr msg);
+    void plannerFlagCallback(const std_msgs::Bool &msg);
+    void collisionFlagCallback(const std_msgs::Bool &msg);
+
     void rvizCallback(const geometry_msgs::PoseStampedConstPtr &msg);
 
-    void publishSE(MAVState start, MAVState end);
-
     ros::Publisher wps_pub_, setpoint_raw_local_pub_;
-    ros::Subscriber state_sub_, odom_sub_, rviz_sub_, bspline_sub_, planerflag_sub_;
+    ros::Subscriber state_sub_, odom_sub_, rviz_sub_, bspline_sub_;
+    ros::Subscriber collisionflag_sub_, planerflag_sub_;
 
+    std::ofstream yf_mission_file_;
     std::vector<Eigen::Vector3d> pos_cmds_, pos_actual_;
     ros::Publisher poscmds_vis_pub_, posactual_vis_pub_;
 
-    Eigen::Vector3d pos_sp_, vel_sp_, acc_sp_; // 定义成全局变量，保证记录最后一个点
-    double yaw_sp_;
     double last_yaw_, last_yaw_dot_;
-
     std::pair<double, double> calculate_yaw(double t_cur, Eigen::Vector3d &pos, ros::Time &time_now, ros::Time &time_last);
-    double quaternion_to_yaw(geometry_msgs::Quaternion &q);
+    double quaternion_to_yaw(Eigen::Quaterniond &q);
     void publishPoints(std::vector<Eigen::Vector3d> points, ros::Publisher pub);
 
 public:

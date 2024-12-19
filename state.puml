@@ -6,10 +6,10 @@ state MAPPING: update workspace
 MAPPING: collision check
 MAPPING-->MAPPING
 
-state PLANNING: wait call
-PLANNING: plan
-PLANNING: publish trajectory
-PLANNING-->PLANNING
+state LOCALPLANNING: wait call
+LOCALPLANNING: plan
+LOCALPLANNING: publish trajectory
+LOCALPLANNING-->LOCALPLANNING
 
 
 state MANAGER: check inputs right, otherwise return
@@ -47,9 +47,11 @@ state MANAGER{
         state EXEC_TRAJ: check if need replan and reach end
         EXEC_TRAJ: send cmds
 
-        state WAIT_TRAJ: wait target
+        state WAIT_TRAJ: wait LOCALPLANNING result
         WAIT_TRAJ: if from GEN_NEW_TRAJ, send zero
         WAIT_TRAJ: if from REPLAN_TRAJ, send cmds from planned trajectory
+        WAIT_TRAJ: if waiting too long time, break
+
 
         [*]-[#green,bold]-->GEN_NEW_TRAJ
         [*]-[#red,bold]-->REPLAN_TRAJ: collision
@@ -82,7 +84,7 @@ state fork_state <<fork>>
 [*]-->fork_state
 fork_state-[#green,bold]->MANAGER
 fork_state-[#green,bold]->MAPPING
-fork_state-[#green,bold]->PLANNING
+fork_state-[#green,bold]->LOCALPLANNING
 
 
 
