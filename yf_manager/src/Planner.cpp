@@ -1,25 +1,25 @@
-#include "PlanFSM.h"
+#include "Planner.h"
 
-PlanFSM::PlanFSM(/* args */)
+Planner::Planner(/* args */)
 {
 }
 
-PlanFSM::~PlanFSM()
+Planner::~Planner()
 {
 }
 
-void PlanFSM::init(std::string filename, ros::NodeHandle &nh)
+void Planner::init(std::string filename, ros::NodeHandle &nh)
 {
     depth_sub_.reset(new message_filters::Subscriber<sensor_msgs::Image>(nh, "/depth", 1));
     odom_sub_.reset(new message_filters::Subscriber<nav_msgs::Odometry>(nh, "/odom", 1));
     sync_image_odom_.reset(new message_filters::Synchronizer<SyncPolicyImageOdom>(
         SyncPolicyImageOdom(100), *depth_sub_, *odom_sub_));
-    sync_image_odom_->registerCallback(boost::bind(&PlanFSM::depthOdomCallback, this, _1, _2));
+    sync_image_odom_->registerCallback(boost::bind(&Planner::depthOdomCallback, this, _1, _2));
 
-    waypoints_sub_ = nh.subscribe("/mission/waypoints", 1, &PlanFSM::waypointsCallback, this);
+    waypoints_sub_ = nh.subscribe("/mission/waypoints", 1, &Planner::waypointsCallback, this);
 
-    mapping_timer_ = nh.createTimer(ros::Duration(0.05), &PlanFSM::updateMapCallback, this);
-    planning_timer_ = nh.createTimer(ros::Duration(0.01), &PlanFSM::execPlanningCallback, this);
+    mapping_timer_ = nh.createTimer(ros::Duration(0.05), &Planner::updateMapCallback, this);
+    planning_timer_ = nh.createTimer(ros::Duration(0.01), &Planner::execPlanningCallback, this);
     planerflag_pub_ = nh.advertise<std_msgs::Bool>("/planner/result/flag", 10);
     bspline_pub_ = nh.advertise<yf_manager::Bspline>("/planner/result/bspline", 1);
     collisionflag_pub_ = nh.advertise<std_msgs::Bool>("/planner/collision/flag", 10);
@@ -60,7 +60,7 @@ void PlanFSM::init(std::string filename, ros::NodeHandle &nh)
 }
 
 // mapping
-void PlanFSM::setCameraParam(std::string filename)
+void Planner::setCameraParam(std::string filename)
 {
     cv::FileStorage fs(filename, cv::FileStorage::READ);
     if (!fs.isOpened())
@@ -110,7 +110,7 @@ void PlanFSM::setCameraParam(std::string filename)
     std::cout << "[CameraParam INIT] T_C_2_B: " << camData_.T_C_2_B.transpose() << std::endl;
 }
 
-void PlanFSM::depthOdomCallback(const sensor_msgs::ImageConstPtr &img, const nav_msgs::OdometryConstPtr &odom)
+void Planner::depthOdomCallback(const sensor_msgs::ImageConstPtr &img, const nav_msgs::OdometryConstPtr &odom)
 {
     camData_.camera_pos(0) = odom->pose.pose.position.x;
     camData_.camera_pos(1) = odom->pose.pose.position.y;
@@ -129,7 +129,7 @@ void PlanFSM::depthOdomCallback(const sensor_msgs::ImageConstPtr &img, const nav
     camData_.has_depth = true;
 }
 
-void PlanFSM::updateMapCallback(const ros::TimerEvent &)
+void Planner::updateMapCallback(const ros::TimerEvent &)
 {
     if (camData_.has_depth != true)
         return;
@@ -246,7 +246,7 @@ void PlanFSM::updateMapCallback(const ros::TimerEvent &)
                                           ros::Time::now(), "map", "base_link"));
 }
 
-bool PlanFSM::collisionCheck(double delta, double min_distance)
+bool Planner::collisionCheck(double delta, double min_distance)
 {
     // for (int i = 0; i < int(0.75 * trajectory_.duration_ / delta); i++)
     for (int i = 0; i < int(trajectory_.duration_ / delta); i++)
@@ -260,7 +260,7 @@ bool PlanFSM::collisionCheck(double delta, double min_distance)
     return false;
 }
 
-bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
+bool Planner::callReplan(MAVState start, MAVState end, bool init)
 {
     double time_interval;
     std::vector<Eigen::Vector3d> search_path, opt_path;
@@ -369,7 +369,7 @@ bool PlanFSM::callReplan(MAVState start, MAVState end, bool init)
     return true;
 }
 
-void PlanFSM::waypointsCallback(const yf_manager::WayPointsConstPtr &msg)
+void Planner::waypointsCallback(const yf_manager::WayPointsConstPtr &msg)
 {
     trajectory_.start_mavstate.pos << msg->pos_x[0], msg->pos_y[0], msg->pos_z[0];
     trajectory_.start_mavstate.vel << msg->vel_x[0], msg->vel_y[0], msg->vel_z[0];
@@ -389,7 +389,7 @@ void PlanFSM::waypointsCallback(const yf_manager::WayPointsConstPtr &msg)
     have_target_ = true;
 }
 
-bool PlanFSM::getLocalTarget(MAVState &target, MAVState start, MAVState end, double length)
+bool Planner::getLocalTarget(MAVState &target, MAVState start, MAVState end, double length)
 {
     double distance = (end.pos - start.pos).norm();
     if (distance <= workspace_ptr_->getResolution() || distance < hybirdastar_ptr_->getResolution())
@@ -441,7 +441,7 @@ bool PlanFSM::getLocalTarget(MAVState &target, MAVState start, MAVState end, dou
     return true;
 }
 
-void PlanFSM::execPlanningCallback(const ros::TimerEvent &e)
+void Planner::execPlanningCallback(const ros::TimerEvent &e)
 {
     if (!have_target_)
     {
@@ -476,7 +476,7 @@ void PlanFSM::execPlanningCallback(const ros::TimerEvent &e)
 }
 
 // 可视化
-void PlanFSM::publishNewOcc()
+void Planner::publishNewOcc()
 {
     std::vector<int> *newOcc;
     newOcc = workspace_ptr_->SOGMPtr_->getNewOcc();
@@ -506,7 +506,7 @@ void PlanFSM::publishNewOcc()
     new_occ_pub_.publish(cloud_msg);
 }
 
-void PlanFSM::publishNewFree()
+void Planner::publishNewFree()
 {
     std::vector<int> *newFree;
     newFree = workspace_ptr_->SOGMPtr_->getNewFree();
@@ -536,7 +536,7 @@ void PlanFSM::publishNewFree()
     new_free_pub_.publish(cloud_msg);
 }
 
-void PlanFSM::publishPath(std::vector<Eigen::Vector3d> path, ros::Publisher pub)
+void Planner::publishPath(std::vector<Eigen::Vector3d> path, ros::Publisher pub)
 {
     nav_msgs::Path path_ros;
     geometry_msgs::PoseStamped pt;
@@ -551,7 +551,7 @@ void PlanFSM::publishPath(std::vector<Eigen::Vector3d> path, ros::Publisher pub)
     pub.publish(path_ros);
 }
 
-void PlanFSM::publishPoints(std::vector<Eigen::Vector3d> points, ros::Publisher pub)
+void Planner::publishPoints(std::vector<Eigen::Vector3d> points, ros::Publisher pub)
 {
     pcl::PointXYZ pt;
     pcl::PointCloud<pcl::PointXYZ> cloud;

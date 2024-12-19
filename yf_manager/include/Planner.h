@@ -108,7 +108,7 @@ struct MAVTraj
     UniformBspline position_traj_, velocity_traj_, acceleration_traj_;
 };
 
-class PlanFSM
+class Planner
 {
 private:
     PathNlopt::Ptr pathnlopt_ptr_;
@@ -163,8 +163,8 @@ private:
     void publishPoints(std::vector<Eigen::Vector3d> points, ros::Publisher pub);
 
 public:
-    PlanFSM(/* args */);
-    ~PlanFSM();
+    Planner(/* args */);
+    ~Planner();
 
     void init(std::string filename, ros::NodeHandle &nh);
 };

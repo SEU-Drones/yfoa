@@ -12,15 +12,11 @@ LOCALPLANNING: publish trajectory
 LOCALPLANNING-->LOCALPLANNING
 
 
-state MANAGER: check inputs right, otherwise return
-state MANAGER: do the following tasks
+state MANAGER: check inputs right, otherwise reset and return
 state MANAGER: check armming state. if disarmming, clear and return
 state MANAGER: check flight mode. if non-OFFBOARD, clear and return
 state MANAGER: if enter OFFBOARD, preprocess waypoints once and global planninng
-state MANAGER: check if arriving  target
-state MANAGER: call plan
-state MANAGER: call replan
-state MANAGER: execute
+
 
 state MANAGER{
 
@@ -85,6 +81,8 @@ state fork_state <<fork>>
 fork_state-[#green,bold]->MANAGER
 fork_state-[#green,bold]->MAPPING
 fork_state-[#green,bold]->LOCALPLANNING
+
+' MAPPING-[#red,bold]->REPLAN_TRAJ
 
 
 

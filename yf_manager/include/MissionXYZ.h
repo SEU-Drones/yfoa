@@ -103,7 +103,7 @@ private:
         VEL
     };
 
-    mavros_msgs::State uav_sysstate_, last_uav_sysstate_;
+    mavros_msgs::State uav_sysstate_;
     MAVState home_; // home位置
     MAVState current_state_, end_state_;
 

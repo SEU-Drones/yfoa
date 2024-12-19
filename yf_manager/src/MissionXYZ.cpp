@@ -3,7 +3,7 @@
  * @Author:       yong
  * @Date: 2022-10-19
  * @LastEditors: Please set LastEditors
- * @LastEditTime: 2024-12-19 17:32:13
+ * @LastEditTime: 2024-12-19 18:39:54
  * @Description:
  * @Subscriber:
  * @Publisher:
@@ -77,36 +77,19 @@ void MissionXYZ::init(ros::NodeHandle node)
 
 void MissionXYZ::missionCallback(const ros::TimerEvent &e)
 {
-
     if (!have_odom_ && !have_depth_) // check inputs
     {
         reset();
         return;
     }
 
-    if (uav_sysstate_.armed == false && last_uav_sysstate_.armed == true) // check armming state
-    {
-        reset();
-        changeMissionState(mission_fsm_state_, MISSION_STATE::READY);
-        // return;
-    }
-
-    if (uav_sysstate_.armed == true)
-    {
-        if (uav_sysstate_.mode != "OFFBOARD" && last_uav_sysstate_.mode == "OFFBOARD") // check flight
-        {
-            reset();
-            changeMissionState(mission_fsm_state_, MISSION_STATE::MANUALFLIGHT);
-            // return;
-        }
-    }
-
     switch (mission_fsm_state_)
     {
     case MISSION_STATE::READY:
     {
-        if (uav_sysstate_.armed == true && last_uav_sysstate_.armed == false)
+        if (uav_sysstate_.armed == true) // disarmming to armming
         {
+            reset();
             home_ = current_state_;
             changeMissionState(mission_fsm_state_, MISSION_STATE::MANUALFLIGHT);
         }
@@ -115,7 +98,13 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
 
     case MISSION_STATE::MANUALFLIGHT:
     {
-        if (uav_sysstate_.mode == "OFFBOARD" && last_uav_sysstate_.mode != "OFFBOARD")
+        if (uav_sysstate_.armed == false) // armming to disarmming
+        {
+            changeMissionState(mission_fsm_state_, MISSION_STATE::READY);
+            return;
+        }
+
+        if (uav_sysstate_.mode == "OFFBOARD") // enter OFFBOARD
         {
             std::cout << "[mission]  the OFFBOARD position(x,y,z,yaw): " << current_state_.pos.transpose() << ", " << quaternion_to_yaw(current_state_.quat) << std::endl;
 
@@ -147,6 +136,17 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
 
     case MISSION_STATE::AUTOFLIGHT:
     {
+        if (uav_sysstate_.armed == false) // armming to disarmming
+        {
+            changeMissionState(mission_fsm_state_, MISSION_STATE::READY);
+            return;
+        }
+        if (uav_sysstate_.mode != "OFFBOARD") // enter OFFBOARD
+        {
+            changeMissionState(mission_fsm_state_, MISSION_STATE::MANUALFLIGHT);
+            return;
+        }
+
         static int cameFrom = MISSION_AUTO_STATE::GEN_NEW_TRAJ;
 
         Eigen::Vector3d pos_sp, vel_sp, acc_sp;
@@ -173,7 +173,6 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
             publishCmd(Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(), 0.0, ControlMode::VEL);
             cameFrom = MISSION_AUTO_STATE::GEN_NEW_TRAJ;
             changeMissionAutoState(mission_auto_fsm_state_, MISSION_AUTO_STATE::WAIT_TRAJ);
-
             break;
         }
         case MISSION_AUTO_STATE::REPLAN_TRAJ:
@@ -246,7 +245,7 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
                 changeMissionAutoState(mission_auto_fsm_state_, MISSION_AUTO_STATE::EXEC_TRAJ);
             }
 
-            if (t_cur > 0.3) // 如果等待的时间太长,退出.
+            if (t_cur > 0.5) // 如果等待的时间太长,退出.
                 changeMissionState(mission_fsm_state_, MISSION_STATE::MANUALFLIGHT);
 
             // changeMissionAutoState(mission_auto_fsm_state_, MISSION_AUTO_STATE::GEN_NEW_TRAJ);
@@ -272,8 +271,6 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
         time_last = time_now;
     }
     }
-
-    last_uav_sysstate_ = uav_sysstate_;
 }
 
 void MissionXYZ::changeMissionState(int &mode, int next)

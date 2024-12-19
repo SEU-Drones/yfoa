@@ -55,12 +55,12 @@ catkin_package(
   CATKIN_DEPENDS message_runtime gridmap yf_planner
 )
 
-add_executable(PlanFSM_node
-  include/PlanFSM.h
-  src/PlanFSM.cpp 
-  src/PlanFSM_node.cpp
+add_executable(Planner_node
+  include/Planner.h
+  src/Planner.cpp 
+  src/Planner_node.cpp
   )
-target_link_libraries(PlanFSM_node 
+target_link_libraries(Planner_node 
   ${catkin_LIBRARIES}
   )
 
