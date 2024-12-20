@@ -62,6 +62,7 @@ add_executable(Planner_node
   )
 target_link_libraries(Planner_node 
   ${catkin_LIBRARIES}
+  ${OpenCV_LIBS}
   )
 
 add_executable(MissionXYZ_node

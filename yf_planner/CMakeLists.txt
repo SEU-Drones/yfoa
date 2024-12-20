@@ -48,5 +48,6 @@ target_link_libraries(yf_planner
   ${catkin_LIBRARIES}
   ${NLOPT_LIBRARIES}
   ${PCL_LIBRARIES}
+  ${OpenCV_LIBS}
 )
 
