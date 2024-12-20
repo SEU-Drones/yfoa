@@ -40,16 +40,6 @@
 // #define CYAN    "\033[36m"      /* 青色 */
 // #define WHITE   "\033[37m"      /* 白色 */
 
-enum FsmState
-{
-    INIT,
-    WAIT_TARGET,
-    GEN_NEW_TRAJ,
-    REPLAN_TRAJ,
-    EXEC_TRAJ,
-    EMERGENCY_STOP
-};
-
 struct cameraData
 {
     /* depth image process */
@@ -69,7 +59,7 @@ struct cameraData
 
     cv::Mat depth_image;
     pcl::PointCloud<pcl::PointXYZ> ptws_hit, ptws_miss;
-    bool has_depth;
+    bool have_depth;
 };
 
 struct MAVState
@@ -137,19 +127,17 @@ private:
     void depthOdomCallback(const sensor_msgs::ImageConstPtr &img, const nav_msgs::OdometryConstPtr &odom);
     void updateMapCallback(const ros::TimerEvent &);
 
-    void odometryCallback(const nav_msgs::OdometryConstPtr &msg);
-    void waypointsCallback(const yf_manager::WayPointsConstPtr &msg);
-
+    double collsion_check_dist_;
     bool collisionCheck(double delta, double min_distance);
 
-    double collsion_check_dist_;
+    void waypointsCallback(const yf_manager::WayPointsConstPtr &msg);
+
     bool callReplan(MAVState start, MAVState end, bool init);
     bool getLocalTarget(MAVState &target, MAVState start, MAVState end, double length);
     void execPlanningCallback(const ros::TimerEvent &e);
 
-    bool have_odom_;
     bool have_target_;
-    bool plannerflag_;
+    bool planner_flag_;
 
     double mapping_time_;
 

@@ -20,6 +20,7 @@ void Planner::init(std::string filename, ros::NodeHandle &nh)
 
     mapping_timer_ = nh.createTimer(ros::Duration(0.05), &Planner::updateMapCallback, this);
     planning_timer_ = nh.createTimer(ros::Duration(0.01), &Planner::execPlanningCallback, this);
+
     planerflag_pub_ = nh.advertise<std_msgs::Bool>("/planner/result/flag", 10);
     bspline_pub_ = nh.advertise<yf_manager::Bspline>("/planner/result/bspline", 1);
     collisionflag_pub_ = nh.advertise<std_msgs::Bool>("/planner/collision/flag", 10);
@@ -35,14 +36,15 @@ void Planner::init(std::string filename, ros::NodeHandle &nh)
     pts_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/planner/pts", 10);
     smotions_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/planner/search_motions", 1);
 
-    nh.param("fsm/control_point_distance", ctrl_pt_dist_, 0.4);
-    nh.param("fsm/planning_horizon", planning_horizon_, 5.0);
-    nh.param("fsm/collsion_check_dist", collsion_check_dist_, 1.0);
+    nh.param("planner/control_point_distance", ctrl_pt_dist_, 0.4);
+    nh.param("planner/planning_horizon", planning_horizon_, 5.0);
+    nh.param("planner/collsion_check_dist", collsion_check_dist_, 1.0);
 
     // 初始化环境
     workspace_ptr_.reset(new InESDFMap);
     workspace_ptr_->init(filename);
     setCameraParam(filename);
+    camData_.have_depth = false;
 
     // 初始化搜索算法
     hybirdastar_ptr_.reset(new HybirdAstar);
@@ -52,8 +54,6 @@ void Planner::init(std::string filename, ros::NodeHandle &nh)
     pathnlopt_ptr_.reset(new PathNlopt);
     pathnlopt_ptr_->init(filename, workspace_ptr_, true);
 
-    camData_.has_depth = false;
-    // have_odom_ = false;
     have_target_ = false;
 
     trajectory_.traj_id_ = 0;
@@ -126,18 +126,18 @@ void Planner::depthOdomCallback(const sensor_msgs::ImageConstPtr &img, const nav
     }
     cv_ptr->image.copyTo(camData_.depth_image);
 
-    camData_.has_depth = true;
+    camData_.have_depth = true;
 }
 
 void Planner::updateMapCallback(const ros::TimerEvent &)
 {
-    if (camData_.has_depth != true)
+    if (camData_.have_depth != true)
         return;
 
     ros::Time t1, t2;
     t1 = ros::Time::now();
 
-    camData_.has_depth = false;
+    camData_.have_depth = false;
 
     camData_.R_C_2_W = camData_.camera_q.toRotationMatrix() * camData_.R_C_2_B;
     camData_.T_C_2_W = camData_.camera_pos + camData_.T_C_2_B;
@@ -224,7 +224,7 @@ void Planner::updateMapCallback(const ros::TimerEvent &)
     publishNewFree();
 
     // if (collisionCheck(0.1, collsion_check_dist_) && plan_fsm_state_ == FsmState::EXEC_TRAJ)
-    if (plannerflag_)
+    if (planner_flag_)
     {
         if (collisionCheck(0.1, collsion_check_dist_))
         {
@@ -450,28 +450,28 @@ void Planner::execPlanningCallback(const ros::TimerEvent &e)
 
     if (!getLocalTarget(trajectory_.end_mavstate, trajectory_.start_mavstate, end_mavstate_, planning_horizon_))
     {
-        plannerflag_ = false;
-        std::cout << "\033[32m" << "----------result: " << plannerflag_ << "    start and end states are wrong ------------" << "\033[0m" << std::endl;
+        planner_flag_ = false;
+        std::cout << "\033[32m" << "----------result: " << planner_flag_ << "    start and end states are wrong ------------" << "\033[0m" << std::endl;
     }
 
     std::chrono::system_clock::time_point t1, t2;
     t1 = std::chrono::system_clock::now();
-    plannerflag_ = callReplan(trajectory_.start_mavstate, trajectory_.end_mavstate, true);
+    planner_flag_ = callReplan(trajectory_.start_mavstate, trajectory_.end_mavstate, true);
     t2 = std::chrono::system_clock::now();
 
-    if (plannerflag_)
+    if (planner_flag_)
     {
-        std::cout << "\033[32m" << "----------result: " << plannerflag_ << "    duration: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms ------------" << "\033[0m" << std::endl;
+        std::cout << "\033[32m" << "----------result: " << planner_flag_ << "    duration: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms ------------" << "\033[0m" << std::endl;
     }
     else
     {
-        std::cout << "\033[31m" << "----------result: " << plannerflag_ << "    duration: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms ------------" << "\033[0m" << std::endl;
+        std::cout << "\033[31m" << "----------result: " << planner_flag_ << "    duration: " << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1000.0 << " ms ------------" << "\033[0m" << std::endl;
     }
 
     have_target_ = false;
 
     std_msgs::Bool msg;
-    msg.data = plannerflag_;
+    msg.data = planner_flag_;
     planerflag_pub_.publish(msg);
 }
 

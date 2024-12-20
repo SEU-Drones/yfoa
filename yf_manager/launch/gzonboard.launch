@@ -43,10 +43,10 @@
 
         <param name="paramfile/path" value="$(find yf_manager)/config/gz.yaml" type="string"/>
 
-        <param name="fsm/control_point_distance" value='0.4'/>
+        <param name="planner/control_point_distance" value='0.4'/>
         <!-- 地图的边界 -->
-        <param name="fsm/planning_horizon" value='15.0'/>
-        <param name="fsm/collsion_check_dist" value='1.0'/>
+        <param name="planner/planning_horizon" value='15.0'/>
+        <param name="planner/collsion_check_dist" value='1.0'/>
     </node>
 
 </launch>

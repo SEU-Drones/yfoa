@@ -19,44 +19,41 @@ state MISSION{
     state MANUALFLIGHT: flight under non-OFFBOARD
     ' MANUALFLIGHT: if enter OFFBOARD, preprocess waypoints
 
-    state AUTOFLIGHT: if enter OFFBOARD, preprocess waypoints once and global planninng
-    AUTOFLIGHT: check if arriving  target
-    AUTOFLIGHT: send cmds
+    state AUTOFLIGHT: work under armming and OFFBORAD mode
     state AUTOFLIGHT{
-        state GEN_NEW_TRAJ: chose target
-        GEN_NEW_TRAJ: get start state from current state
-        GEN_NEW_TRAJ: get local target state
+        state GEN_NEW_TRAJ: chose target from waypoints
+        GEN_NEW_TRAJ: set current state as start state
         GEN_NEW_TRAJ: call replan via sending start and target state
 
-        state REPLAN_TRAJ: chose target
-        REPLAN_TRAJ: get start state from trajectory
-        REPLAN_TRAJ: set local target state
-        REPLAN_TRAJ: call replan via sending start and target state
-
-        state EXEC_TRAJ: check if need replan and reach end
-        EXEC_TRAJ: send cmds
-
-        state WAIT_TRAJ: wait LOCALPLANNING result
-        WAIT_TRAJ: if from GEN_NEW_TRAJ, send zero
-        WAIT_TRAJ: if from REPLAN_TRAJ, send cmds from planned trajectory
+        state WAIT_TRAJ: wait planner result
+        WAIT_TRAJ: if come from GEN_NEW_TRAJ, send zero
+        WAIT_TRAJ: if come from REPLAN_TRAJ, send cmds from planned trajectory
         WAIT_TRAJ: if waiting too long time, break
 
+        state EXEC_TRAJ: send cmds
+        EXEC_TRAJ: check if need replan and reach end
 
-        [*]-[#green,bold]-->GEN_NEW_TRAJ
+        state REPLAN_TRAJ: chose target from waypoints
+        REPLAN_TRAJ: get start state from trajectory
+        REPLAN_TRAJ: call replan via sending start and target state
+
+        [*]-[#green,bold]-->GEN_NEW_TRAJ: no traj
         [*]-[#red,bold]-->REPLAN_TRAJ: collision
 
         GEN_NEW_TRAJ-[#green,bold]->WAIT_TRAJ
-        WAIT_TRAJ-[#green,bold]->GEN_NEW_TRAJ: plan failed
+        ' WAIT_TRAJ-[#green,bold]->GEN_NEW_TRAJ: plan failed
 
         WAIT_TRAJ-[#green,bold]->EXEC_TRAJ: receive traj
         EXEC_TRAJ-[#green,bold]->REPLAN_TRAJ: over duration/distance
 
         REPLAN_TRAJ-[#green,bold]->WAIT_TRAJ
 
-        EXEC_TRAJ-[#green,bold]->[*]: reach end
+        EXEC_TRAJ-[#green,bold]->[*]: reach end     
+
+        state FAULT 
     }
 
-    state FAULT: empty
+
 
     ' [*] -[#green,bold]-> IDLE: initialization
     [*]-->READY
