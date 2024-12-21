@@ -80,7 +80,7 @@ struct MAVTraj
 class MissionXYZ
 {
 private:
-    std::vector<MAVState> wps_; // 途径点
+    std::vector<MAVState> wps_, wps_bias_; // 途径点
     int wps_num_;
     int wps_index_;
     double wps_thr_; // 判断到达途径点阈值
@@ -103,7 +103,7 @@ private:
         VEL
     };
 
-    mavros_msgs::State uav_sysstate_;
+    mavros_msgs::State uav_sysstate_, last_uav_sysstate_;
     MAVState home_; // home位置
     MAVState current_state_, end_state_;
 
