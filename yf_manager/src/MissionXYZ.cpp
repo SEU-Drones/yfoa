@@ -3,7 +3,7 @@
  * @Author:       yong
  * @Date: 2022-10-19
  * @LastEditors: Please set LastEditors
- * @LastEditTime: 2024-12-19 18:39:54
+ * @LastEditTime: 2024-12-21 10:50:06
  * @Description:
  * @Subscriber:
  * @Publisher:
@@ -77,8 +77,10 @@ void MissionXYZ::init(ros::NodeHandle node)
 
 void MissionXYZ::missionCallback(const ros::TimerEvent &e)
 {
-    if (!have_odom_ && !have_depth_) // check inputs
+    // if (!have_odom_ || !have_depth_) // check inputs
+    if (!have_odom_) // check inputs
     {
+        ROS_WARN("no odometry!");
         reset();
         return;
     }
@@ -104,27 +106,31 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
             return;
         }
 
-        if (uav_sysstate_.mode == "OFFBOARD") // enter OFFBOARD
+        if (uav_sysstate_.mode == "OFFBOARD" && last_uav_sysstate_.mode != "OFFBOARD") // enter OFFBOARD
         {
             std::cout << "[mission]  the OFFBOARD position(x,y,z,yaw): " << current_state_.pos.transpose() << ", " << quaternion_to_yaw(current_state_.quat) << std::endl;
 
+            wps_bias_.resize(wps_.size());
             for (int i = 0; i < wps_.size(); i++)
             {
                 if (handle_wpts_xy_ == "UseArmmingPoint")
                 {
-                    wps_[i].pos[0] += home_.pos[0];
-                    wps_[i].pos[1] += home_.pos[1];
+                    wps_bias_[i].pos[0] = wps_[i].pos[0] + home_.pos[0];
+                    wps_bias_[i].pos[1] = wps_[i].pos[1] + home_.pos[1];
                 }
                 else if (handle_wpts_xy_ == "UseOffboardPoint")
                 {
-                    wps_[i].pos[0] += current_state_.pos[0];
-                    wps_[i].pos[1] += current_state_.pos[1];
+                    wps_bias_[i].pos[0] = wps_[i].pos[0] + current_state_.pos[0];
+                    wps_bias_[i].pos[1] = wps_[i].pos[1] + current_state_.pos[1];
                 }
 
                 if (handle_wpts_z_ == "UseSetHeight")
-                    wps_[i].pos[2] += home_.pos[2];
+                    wps_bias_[i].pos[2] = wps_[i].pos[2] + home_.pos[2];
                 else if (handle_wpts_z_ == "UseOffboardHeight") // 当前高度作为目标点高度
-                    wps_[i].pos[2] = current_state_.pos[2];
+                    wps_bias_[i].pos[2] = current_state_.pos[2];
+
+                wps_bias_[i].max_acc = wps_[i].max_acc;
+                wps_bias_[i].max_vel = wps_[i].max_vel;
             }
 
             changeMissionState(mission_fsm_state_, MISSION_STATE::AUTOFLIGHT);
@@ -271,6 +277,7 @@ void MissionXYZ::missionCallback(const ros::TimerEvent &e)
         time_last = time_now;
     }
     }
+    last_uav_sysstate_ = uav_sysstate_;
 }
 
 void MissionXYZ::changeMissionState(int &mode, int next)
@@ -291,17 +298,17 @@ MAVState MissionXYZ::choseTarget()
 {
     // 根据当前位置从途径点向量中选择合适的途径点作为目标点
 
-    if (wps_index_ < wps_.size() - 1) // 判断是否到达途径点
+    if (wps_index_ < wps_bias_.size() - 1) // 判断是否到达途径点
     {
-        if (sqrt(pow(current_state_.pos[0] - wps_[wps_index_].pos[0], 2) +
-                 pow(current_state_.pos[1] - wps_[wps_index_].pos[1], 2) +
-                 pow(current_state_.pos[2] - wps_[wps_index_].pos[2], 2)) < wps_thr_)
+        if (sqrt(pow(current_state_.pos[0] - wps_bias_[wps_index_].pos[0], 2) +
+                 pow(current_state_.pos[1] - wps_bias_[wps_index_].pos[1], 2) +
+                 pow(current_state_.pos[2] - wps_bias_[wps_index_].pos[2], 2)) < wps_thr_)
         {
             wps_index_++;
         }
     }
 
-    return wps_[wps_index_];
+    return wps_bias_[wps_index_];
 }
 
 void MissionXYZ::publishCmd(Eigen::Vector3d pos_sp, Eigen::Vector3d vel_sp, Eigen::Vector3d acc_sp, double yaw_sp, int cmode)
@@ -493,10 +500,10 @@ void MissionXYZ::rvizCallback(const geometry_msgs::PoseStampedConstPtr &msg)
     wps_num_ = 1;
     MAVState point;
     point.pos = Eigen::Vector3d{msg->pose.position.x, msg->pose.position.y, current_state_.pos[2]};
-    point.max_acc = wps_[0].max_acc;
-    point.max_vel = wps_[0].max_vel;
-    wps_.clear();
-    wps_.push_back(point);
+    point.max_acc = wps_bias_[0].max_acc;
+    point.max_vel = wps_bias_[0].max_vel;
+    wps_bias_.clear();
+    wps_bias_.push_back(point);
 }
 
 std::pair<double, double> MissionXYZ::calculate_yaw(double t_cur, Eigen::Vector3d &pos, ros::Time &time_now, ros::Time &time_last)
