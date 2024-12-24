@@ -18,6 +18,21 @@
 - 通过QGC控制无人机起飞到合适高度，切换offboard模式，观察避障情况。
 
 # 实际飞行
+## 起飞前的准备
+1、根据飞机的相机，修改config的相机参数；
+2、修改onboard.launch中的话题和目标点；
+
+## 起飞
+远程登陆无人机的板载计算机，打开如下程序
+- 打开mavros，roslaunch yf_manager px4_mavros.launch
+- 打开realsense，roslaunch yf_manager rs_depth.launch
+- 打开规划，roslaunch yf_manager yfonboard.launch
+
+在地面计算机打开可视化程序（需要配置主从机）：
+- roslaunch yf_manager yfremotevis.launch
+
+仔细观察终端和rviz的显示。
+
 
 # 程序设计
 ## 约定

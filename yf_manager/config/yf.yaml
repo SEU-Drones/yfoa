@@ -18,17 +18,10 @@ PlanMap:
 DepthCamera:
   heigth: 480 # /realsense_plugin/camera/depth/image_raw
   width: 640
-  fx: 554.3826904296875
-  fy: 554.3826904296875
-  cx: 320.0
-  cy: 240.0
-
-  # heigth: 640 # /camera/depth/image_rect_raw
-  # width: 480
-  # fx: 392.365234375
-  # fy: 392.365234375
-  # cx: 320.01055908203125
-  # cy: 241.12890625
+  fx: 386.11578369140625
+  fy: 386.11578369140625
+  cx: 320.0079345703125
+  cy: 239.40652465820312
 
   k_depth_scaling_factor: 1000
   depth_maxdist: 10.0
@@ -40,7 +33,9 @@ DepthCamera:
     rows: 3
     cols: 3
     dt: d
-    data: [0, 0, 1, -1, 0, 0, 0, -1, 0]
+    # data: [0, 0, 1, -1, 0, 0, 0, -1, 0]
+    data: [0, 0, 1, 1, 0, 0, 0, 1, 0]
+    
 
   T_C_2_B: !!opencv-matrix  # !! explicity specify the type
     rows: 1
